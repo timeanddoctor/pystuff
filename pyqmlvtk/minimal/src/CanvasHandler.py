@@ -108,9 +108,7 @@ class CanvasHandler(QObject):
         print(f'Otwieram: {fileName}')
         self.__m_vtkFboItem.addModel(fileName)
 
-        localFilePath = fileName
-        # TODO: Remove file:///
-        # localFilePath = fileName.toLocalFile()
+        localFilePath = QUrl(fileName).toLocalFile()
 
         currentDir = QFileInfo(localFilePath).absoluteDir()
         currentPath = currentDir.absolutePath()
@@ -138,3 +136,8 @@ class CanvasHandler(QObject):
         qDebug('CanvasHandler::startApplication()')
         self.__m_vtkFboItem.rendererInitialized.disconnect(self.startApplication)
 
+# Local variables: #
+# tab-width: 2 #
+# python-indent: 2 #
+# indent-tabs-mode: nil #
+# End: #
