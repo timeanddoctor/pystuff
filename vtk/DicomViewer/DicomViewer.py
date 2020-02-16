@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.uic import loadUiType
@@ -6,7 +7,10 @@ from PyQt5.uic import loadUiType
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
-ui, QMainWindow = loadUiType('DicomViewer.ui')
+ui_file = os.path.join(os.path.dirname(__file__),
+                       'DicomViewer.ui')
+
+ui, QMainWindow = loadUiType(ui_file)
 
 class DicomVis(QMainWindow, ui):
 
