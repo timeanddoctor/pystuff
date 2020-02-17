@@ -84,7 +84,6 @@ ApplicationWindow {
             ToolTip.delay: 1000
             ToolTip.text: "Show 2D Chart in right corner"
         }
-
         ChartView {
             id: lineChart
             title: "Line"

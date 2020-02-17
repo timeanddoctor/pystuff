@@ -7,6 +7,7 @@ from qtpy.QtWidgets import QApplication
 from qtpy.QtGui import QIcon
 
 import qtpy.QtGui as QtGui
+
 import qtpy.QtCharts
 
 from QVTKFramebufferObjectItem import FboItem
@@ -31,18 +32,19 @@ def defaultFormat(stereo_capable):
 
   return fmt
 
-class ChartDataProvider(QObject):
+if 1:
+  class ChartDataProvider(QObject):
     def __init__(self, parent=None):
-        super(ChartDataProvider, self).__init__(parent)
+      super(ChartDataProvider, self).__init__(parent)
 
     @Slot(qtpy.QtCore.QObject)
     def fillData(self, series):
-        print(series)
-        series.append(0.1,0.23)
-        series.append(0.4,0.3)
-        series.append(0.7,0.75)
-        series.append(0.85,0.65)
-        series.setName("Czy to ładny przebieg?")
+      print(series)
+      series.append(0.1,0.23)
+      series.append(0.4,0.3)
+      series.append(0.7,0.75)
+      series.append(0.85,0.65)
+      series.setName("Czy to ładny przebieg?")
    
 class CanvasHandler(QObject):
     DEFAULT_MODEL_DIR_KEY = "default_model_dir"
@@ -71,8 +73,8 @@ class CanvasHandler(QObject):
         # Expose/Bind Python classes (QObject) to QML
         ctxt = engine.rootContext() # returns QQmlContext
         ctxt.setContextProperty('canvasHandler', self)
-        self.dataProvider = ChartDataProvider()
-        ctxt.setContextProperty('chartDataProvider', self.dataProvider)
+        #self.dataProvider = ChartDataProvider()
+        #ctxt.setContextProperty('chartDataProvider', self.dataProvider)
 
         # Load main QML file
         engine.load(QUrl.fromLocalFile('resources/main.qml'))
