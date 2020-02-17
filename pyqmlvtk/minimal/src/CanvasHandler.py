@@ -73,8 +73,8 @@ class CanvasHandler(QObject):
         # Expose/Bind Python classes (QObject) to QML
         ctxt = engine.rootContext() # returns QQmlContext
         ctxt.setContextProperty('canvasHandler', self)
-        #self.dataProvider = ChartDataProvider()
-        #ctxt.setContextProperty('chartDataProvider', self.dataProvider)
+        self.dataProvider = ChartDataProvider()
+        ctxt.setContextProperty('chartDataProvider', self.dataProvider)
 
         # Load main QML file
         engine.load(QUrl.fromLocalFile('resources/main.qml'))
