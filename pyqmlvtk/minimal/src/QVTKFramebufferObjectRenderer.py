@@ -177,6 +177,8 @@ class RendererHelper(QObject):
 
     def addModel(self, fileName):
       reader = vtk.vtkSTLReader()
+      # WIN32
+      fileName = QUrl(fileName).toLocalFile()
       url = QUrl(fileName)
       reader.SetFileName(url.path())
       reader.Update()
