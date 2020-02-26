@@ -82,8 +82,8 @@ outline = CreateOutline(fileName1)
 renderer.AddActor(outline)
 
 
-renderer.GetActiveCamera().SetViewUp(0, 0, -1)
-renderer.GetActiveCamera().SetPosition(0, -1, 0)
+renderer.GetActiveCamera().SetViewUp(0, 0, 1)
+renderer.GetActiveCamera().SetPosition(0, -1, 0) # (0,-1,0)
 
 renderer.GetActiveCamera().Azimuth(210)
 renderer.GetActiveCamera().Elevation(30)
