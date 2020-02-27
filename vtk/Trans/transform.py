@@ -233,7 +233,7 @@ class TransformModel(QtGui.QStandardItemModel):
     for row in range(self.rowCount()):
       for col in range(self.columnCount()):
         index = self.index(row,col)
-        self.setData(index, QVariant(float(data[row][col])))
+        self.setData(index, QVariant('%5.2f' % (float(data[row][col]))))
     self.horzHeader = horzHeader
     self.vertHeader = vertHeader
 
@@ -267,7 +267,7 @@ class TransformDelegate(QItemDelegate):
     value = index.model().data(index,Qt.EditRole)
     lineedit = editor
     if type(value) == float:
-      lineedit.setText('%f' % float(value))
+      lineedit.setText('%5.2f' % float(value))
     else:
       lineedit.setText(value)
 

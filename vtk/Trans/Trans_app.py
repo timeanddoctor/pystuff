@@ -8,6 +8,7 @@ from PyQt5.QtCore import qDebug, QObject, Qt, QItemSelectionModel
 
 from transform import (TransformModel, TransformDelegate, TreeItem, TreeModel)
 
+from FloatSlider import QFloatSlider
 ui, QMainWindow = uic.loadUiType('Trans_app_Qt_VTK.ui')
 
 class ViewersApp(QMainWindow, ui):
@@ -19,6 +20,22 @@ class ViewersApp(QMainWindow, ui):
 
   def setup(self):
     self.setupUi(self)
+
+    if 1:
+      # replace widgets
+      nSliders = self.verticalSliderLayout.count()
+      index = nSliders - 1
+      while (index >=0):
+        myWidget = self.verticalSliderLayout.itemAt(index).widget()
+        myWidget.setParent(None)
+        myWidget.close()
+        index = index - 1
+
+      self.floatSlider = []
+      for index in range(nSliders):
+        tmp = QFloatSlider(self, Qt.Horizontal)
+        self.floatSlider.append(tmp)
+        self.verticalSliderLayout.addWidget(tmp)
 
     self.vtk_widget = QMeshViewer(self.vtk_panel)
 
@@ -39,14 +56,23 @@ class ViewersApp(QMainWindow, ui):
     self.tblTransform.horizontalHeader().hide()
     self.tblTransform.verticalHeader().hide()
     self.tblTransform.setVisible(False)
-    #self.tblTransform.resizeColumnsToContents()
-    #self.tblTransform.resizeRowsToContents()
+    header = self.tblTransform.horizontalHeader()
+    header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+    header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+    header.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+    header.setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+
+    header = self.tblTransform.verticalHeader()
+    header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+    header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+    header.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+    header.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
 
     # Set delegates (if any)
-    self.tblTransform.setVisible(True)
-
     self.delegate = TransformDelegate(self)
     self.tblTransform.setItemDelegate(self.delegate)
+
+    self.tblTransform.setVisible(True)
 
     headers = ("Title", "Description")
 
