@@ -177,7 +177,14 @@
                     <item>
                      <widget class="QPushButton" name="btnAddFrame">
                       <property name="text">
-                       <string>Add frame</string>
+                       <string>Update</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="btnClearFrame">
+                      <property name="text">
+                       <string>Clear</string>
                       </property>
                      </widget>
                     </item>
@@ -240,10 +247,10 @@
      <string>&amp;Actions</string>
     </property>
     <addaction name="insertRowAction"/>
-    <addaction name="insertColumnAction"/>
+    <!-- <addaction name="insertColumnAction"/> -->
     <addaction name="separator"/>
     <addaction name="removeRowAction"/>
-    <addaction name="removeColumnAction"/>
+    <!-- <addaction name="removeColumnAction"/> -->
     <addaction name="separator"/>
     <addaction name="insertChildAction"/>
    </widget>

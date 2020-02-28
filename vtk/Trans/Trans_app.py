@@ -74,19 +74,24 @@ class ViewersApp(QMainWindow, ui):
 
     self.tblTransform.setVisible(True)
 
-    headers = ("Title", "Description")
-
-    self.treeModel = TreeModel(headers)
+    headers = ("Title", "Description", "Source", "Dest")
+    self.treeModel = TreeModel(headers, self.vtk_widget.axes)
     self.treeView.setModel(self.treeModel)
+    self.treeView.selectionModel().selectionChanged.connect(self.updateActions)
+    self.treeModel.dataChanged.connect(self.updateFrames)
+
+
+    #self.treeView.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Interactive)
+    self.treeView.header().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+    self.treeView.header().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
 
     # connects slots and signals
     self.btnAddFrame.clicked.connect(self.onAddFrameClicked)
 
     self.insertRowAction.triggered.connect(self.insertRow)
-    self.insertColumnAction.triggered.connect(self.insertColumn)
+    #self.insertColumnAction.triggered.connect(self.insertColumn)
     self.removeRowAction.triggered.connect(self.removeRow)
-    self.removeColumnAction.triggered.connect(self.removeColumn)
-    self.treeView.selectionModel().selectionChanged.connect(self.updateActions)
+    #self.removeColumnAction.triggered.connect(self.removeColumn)
     self.insertChildAction.triggered.connect(self.insertChild)
 
   def insertChild(self):
@@ -102,7 +107,11 @@ class ViewersApp(QMainWindow, ui):
 
     for column in range(model.columnCount(index)):
         child = model.index(0, column, index)
-        model.setData(child, "[No data]", Qt.EditRole)
+        if column < 2:
+          model.setData(child, "[No name]", Qt.EditRole)
+        elif column < 4:
+          model.setData(child, Qt.Unchecked, Qt.CheckStateRole)
+
         if model.headerData(column, Qt.Horizontal) is None:
             model.setHeaderData(column, Qt.Horizontal, "[No header]",
                     Qt.EditRole)
@@ -154,6 +163,18 @@ class ViewersApp(QMainWindow, ui):
       if (model.removeRow(index.row(), index.parent())):
           self.updateActions()
 
+  def updateFrames(self, topLeft, bottomRight, role):
+    if topLeft == bottomRight:
+      if role[0] == Qt.CheckStateRole:
+        print("check-state change")
+        index = topLeft
+        model = self.treeView.model()
+        axes  = model.data(index, Qt.UserRole)
+        checked = model.data(index, Qt.CheckStateRole)
+        if checked:
+          axes.ScalarVisibilityOff()
+
+
   def updateActions(self):
       hasSelection = not self.treeView.selectionModel().selection().isEmpty()
       self.removeRowAction.setEnabled(hasSelection)
@@ -172,6 +193,21 @@ class ViewersApp(QMainWindow, ui):
               self.statusBar().showMessage("Position: (%d,%d)" % (row, column))
           else:
               self.statusBar().showMessage("Position: (%d,%d) in top level" % (row, column))
+          model = self.treeView.model()
+          index = self.treeView.selectionModel().currentIndex()
+          data = model.data(index, Qt.UserRole)
+
+
+          # Color the picked axes
+          self.vtk_widget.interactor.Disable()
+
+          # #* Axes
+          axes = vtk.vtkAxesActor()
+          axes_length = 200.0
+          data.SetTotalLength(axes_length, axes_length, axes_length)
+
+          self.vtk_widget.interactor.Enable()
+          self.vtk_widget.render_window.Render()
 
   def initialize(self):
     self.vtk_widget.start()
@@ -339,7 +375,8 @@ class QMeshViewer(QtWidgets.QFrame):
     axes.GetYAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
     axes.GetZAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
     axes.PickableOn()
-    self.renderer.AddActor(axes)
+    self.axes = axes
+    self.renderer.AddActor(self.axes)
 
   def initPlatform(self):
     qDebug('initPlatform()')

@@ -11,6 +11,8 @@ class TreeItem(object):
     self.parentItem = parent
     self.itemData = data
     self.childItems = []
+    self.source = False
+    self.dest = False
 
   def child(self, row):
     if row < 0 or row >= len(self.childItems):
@@ -32,6 +34,18 @@ class TreeItem(object):
     if column < 0 or column >= len(self.itemData):
       return None
     return self.itemData[column]
+
+  def setSource(self, checked):
+    self.source = checked
+
+  def isSource(self):
+    return self.source
+
+  def setDest(self, checked):
+    self.dest = checked
+
+  def isDest(self):
+    return self.dest
 
   def insertChildren(self, position, count, columns):
     if position < 0 or position > len(self.childItems):
@@ -89,12 +103,13 @@ class TreeItem(object):
     return True
 
 class TreeModel(QAbstractItemModel):
-  def __init__(self, headers, parent=None):
+  def __init__(self, headers, data, parent=None):
     super(TreeModel, self).__init__(parent)
 
     rootData = [header for header in headers]
+    rootData.append(data)
     self.rootItem = TreeItem(rootData)
-    self.setupModelData(self.rootItem)
+    self.setupModelData(self.rootItem, data)
 
   def columnCount(self, parent=QModelIndex()):
       return self.rootItem.columnCount()
@@ -103,16 +118,26 @@ class TreeModel(QAbstractItemModel):
     if not index.isValid():
       return None
 
+    item = self.getItem(index)
+    if (role == Qt.CheckStateRole):
+      if (index.column() == 2):
+        return {True : Qt.Checked, False: Qt.Unchecked}[item.isSource()]
+      if (index.column() ==3):
+        return {True : Qt.Checked, False: Qt.Unchecked}[item.isDest()]
+
+    if role == Qt.UserRole:
+      return item.data(self.rootItem.columnCount()-1)
     if role != Qt.DisplayRole and role != Qt.EditRole:
       return None
 
-    item = self.getItem(index)
     return item.data(index.column())
 
   def flags(self, index):
     if not index.isValid():
       return 0
 
+    if index.column() == 2 or index.column() == 3:
+      return Qt.ItemIsUserCheckable | super(TreeModel,self).flags(index)
     return Qt.ItemIsEditable | super(TreeModel, self).flags(index)
 
   def getItem(self, index):
@@ -124,8 +149,10 @@ class TreeModel(QAbstractItemModel):
 
   def headerData(self, section, orientation, role=Qt.DisplayRole):
     if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-      return self.rootItem.data(section)
-
+      if section < self.rootItem.columnCount() - 1:
+        return self.rootItem.data(section)
+      else:
+        return ""
     return None
 
   def index(self, row, column, parent=QModelIndex()):
@@ -191,11 +218,50 @@ class TreeModel(QAbstractItemModel):
 
     return parentItem.childCount()
 
+  # TODO: Iterate over index (depth,row,col) and compare internalPointer
+
+  def clearSource(self, item):
+    # Depth-first traversal (single column)
+    if 1:
+      if item.isSource():
+        item.setSource(False)
+      else:
+        for i in range(item.childCount()):
+          self.clearSource(item.child(i))
+
+  def clearDest(self, item):
+    # Depth-first traversal
+    if item.isDest():
+      item.setDest(False)
+      # TODO: emit changes
+    for i in range(item.childCount()):
+      self.clearDest(item.child(i))
+
   def setData(self, index, value, role=Qt.EditRole):
+    item = self.getItem(index)
+    if (role == Qt.CheckStateRole):
+      if index.column() == 2:
+        self.clearSource(self.rootItem)
+        if value == Qt.Checked:
+          item.setSource(True)
+        else:
+          item.setSource(False)
+      elif index.column() == 3:
+        self.clearDest(self.rootItem)
+        if value == Qt.Checked:
+          item.setDest(True)
+        else:
+          item.setDest(False)
+      # TODO: dataChanged => update colors
+      self.dataChanged.emit(index,index, [Qt.CheckStateRole]) # topLeft, bottomRight, roles
+      return True
+    if (role == Qt.UserRole):
+      item.setData(index.column(), value)
+      return True
+
     if role != Qt.EditRole:
       return False
 
-    item = self.getItem(index)
     result = item.setData(index.column(), value)
 
     if result:
@@ -213,9 +279,30 @@ class TreeModel(QAbstractItemModel):
 
     return result
 
-  def setupModelData(self, parent):
-    return
+  def setupModelData(self, parent, data):
+    #index = self.currentIndex()
+    index = QModelIndex()
+    if not self.insertRow(index.row()+1, index.parent()):
+      print("Ups")
+      return
 
+    # Two strings, two checkboxes and a hidden data
+    for column in range(self.columnCount(index.parent()) - 3):
+      child = self.index(index.row()+1, column, index.parent())
+      self.setData(child, "Root", Qt.EditRole)
+
+    column = self.columnCount(index.parent()) - 3
+    child = self.index(index.row()+1, column, index.parent())
+    self.setData(child, Qt.Checked, Qt.CheckStateRole)
+
+    column = self.columnCount(index.parent()) - 2
+    child = self.index(index.row()+1, column, index.parent())
+    self.setData(child, Qt.Unchecked, Qt.CheckStateRole)
+
+    column = self.columnCount(index.parent()) - 1
+    child = self.index(index.row()+1, column, index.parent())
+    self.setData(child, data, Qt.UserRole)
+    return
 
 # TODO: Use a proxy model and connect signals properly
 class TransformModel(QtGui.QStandardItemModel):
