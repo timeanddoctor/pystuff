@@ -11,6 +11,14 @@ from transform import (TransformModel, TransformDelegate, TreeItem, TreeModel)
 from FloatSlider import QFloatSlider
 ui, QMainWindow = uic.loadUiType('Trans_app_Qt_VTK.ui')
 
+def bum(axes):
+  axes.GetXAxisShaftProperty().SetColor(0.1,0.1,0.1)
+  axes.GetYAxisShaftProperty().SetColor(0.1,0.1,0.1)
+  axes.GetZAxisShaftProperty().SetColor(0.1,0.1,0.1)
+  axes.GetXAxisTipProperty().SetColor(0.1,0.1,0.1)
+  axes.GetYAxisTipProperty().SetColor(0.1,0.1,0.1)
+  axes.GetZAxisTipProperty().SetColor(0.1,0.1,0.1)
+
 class ViewersApp(QMainWindow, ui):
   def __init__(self):
     #Parent constructor
@@ -172,7 +180,10 @@ class ViewersApp(QMainWindow, ui):
         axes  = model.data(index, Qt.UserRole)
         checked = model.data(index, Qt.CheckStateRole)
         if checked:
-          axes.ScalarVisibilityOff()
+          self.vtk_widget.interactor.Disable()
+          bum(axes)
+          self.vtk_widget.interactor.Enable()
+          self.vtk_widget.render_window.Render()
 
 
   def updateActions(self):
@@ -202,8 +213,7 @@ class ViewersApp(QMainWindow, ui):
           self.vtk_widget.interactor.Disable()
 
           # #* Axes
-          axes = vtk.vtkAxesActor()
-          axes_length = 200.0
+          axes_length = 200
           data.SetTotalLength(axes_length, axes_length, axes_length)
 
           self.vtk_widget.interactor.Enable()
@@ -450,7 +460,6 @@ class QMeshViewer(QtWidgets.QFrame):
     line.GetPointIds().SetId(0, id_1)
     line.GetPointIds().SetId(1, id_2)
     cells.InsertNextCell(line)
-
 
   def initSceneOld(self):
     qDebug('initSceneOld()')
