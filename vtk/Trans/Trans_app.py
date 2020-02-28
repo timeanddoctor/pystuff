@@ -11,13 +11,7 @@ from transform import (TransformModel, TransformDelegate, TreeItem, TreeModel)
 from FloatSlider import QFloatSlider
 ui, QMainWindow = uic.loadUiType('Trans_app_Qt_VTK.ui')
 
-def bum(axes):
-  axes.GetXAxisShaftProperty().SetColor(0.1,0.1,0.1)
-  axes.GetYAxisShaftProperty().SetColor(0.1,0.1,0.1)
-  axes.GetZAxisShaftProperty().SetColor(0.1,0.1,0.1)
-  axes.GetXAxisTipProperty().SetColor(0.1,0.1,0.1)
-  axes.GetYAxisTipProperty().SetColor(0.1,0.1,0.1)
-  axes.GetZAxisTipProperty().SetColor(0.1,0.1,0.1)
+colors = vtk.vtkNamedColors()
 
 class ViewersApp(QMainWindow, ui):
   def __init__(self):
@@ -29,41 +23,38 @@ class ViewersApp(QMainWindow, ui):
   def setup(self):
     self.setupUi(self)
 
-    if 1:
-      # replace widgets
-      nSliders = self.verticalSliderLayout.count()
-      index = nSliders - 1
-      while (index >=0):
-        myWidget = self.verticalSliderLayout.itemAt(index).widget()
-        myWidget.setParent(None)
-        myWidget.close()
-        index = index - 1
+    # replace widgets
+    nSliders = self.verticalSliderLayout.count()
+    index = nSliders - 1
+    while (index >=0):
+      myWidget = self.verticalSliderLayout.itemAt(index).widget()
+      myWidget.setParent(None)
+      myWidget.close()
+      index = index - 1
 
-      self.floatSlider = []
-      for index in range(nSliders):
-        tmp = QFloatSlider(self, Qt.Horizontal)
-        self.floatSlider.append(tmp)
-        self.verticalSliderLayout.addWidget(tmp)
+    self.floatSlider = []
+    for index in range(nSliders):
+      tmp = QFloatSlider(self, Qt.Horizontal)
+      self.floatSlider.append(tmp)
+      self.verticalSliderLayout.addWidget(tmp)
 
     self.vtk_widget = QMeshViewer(self.vtk_panel)
 
-    # add a layout to let the vtk panel grow/shrink with window resize
+    # Add a layout to let the vtk panel grow/shrink with window resize
     self.vtk_layout = QtWidgets.QHBoxLayout()
     self.vtk_layout.addWidget(self.vtk_widget)
     self.vtk_layout.setContentsMargins(0,0,0,0)
     self.vtk_panel.setLayout(self.vtk_layout)
 
-    # transformation matrix
-    data = [[1, 0, 0 , 0],
-            [0, 1, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1]]
+    # Initialize model for transformations
+    data = np.diag(np.ones(4))
     self.affineTransform = TransformModel(data)
 
     self.tblTransform.setModel(self.affineTransform)
     self.tblTransform.horizontalHeader().hide()
     self.tblTransform.verticalHeader().hide()
     self.tblTransform.setVisible(False)
+
     header = self.tblTransform.horizontalHeader()
     header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
     header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
@@ -79,27 +70,22 @@ class ViewersApp(QMainWindow, ui):
     # Set delegates (if any)
     self.delegate = TransformDelegate(self)
     self.tblTransform.setItemDelegate(self.delegate)
-
     self.tblTransform.setVisible(True)
 
+    # Tree view model
     headers = ("Title", "Description", "Source", "Dest")
     self.treeModel = TreeModel(headers, self.vtk_widget.axes)
     self.treeView.setModel(self.treeModel)
     self.treeView.selectionModel().selectionChanged.connect(self.updateActions)
     self.treeModel.dataChanged.connect(self.updateFrames)
 
-
-    #self.treeView.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Interactive)
     self.treeView.header().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
     self.treeView.header().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
 
-    # connects slots and signals
-    self.btnAddFrame.clicked.connect(self.onAddFrameClicked)
-
+    # Connects slots and signals
+    self.btnUpdate.clicked.connect(self.onUpdateClicked)
     self.insertRowAction.triggered.connect(self.insertRow)
-    #self.insertColumnAction.triggered.connect(self.insertColumn)
     self.removeRowAction.triggered.connect(self.removeRow)
-    #self.removeColumnAction.triggered.connect(self.removeColumn)
     self.insertChildAction.triggered.connect(self.insertChild)
 
   def insertChild(self):
@@ -107,93 +93,110 @@ class ViewersApp(QMainWindow, ui):
     model = self.treeView.model()
 
     if model.columnCount(index) == 0:
-        if not model.insertColumn(0, index):
-            return
-
-    if not model.insertRow(0, index):
+      if not model.insertColumn(0, index):
         return
 
-    for column in range(model.columnCount(index)):
-        child = model.index(0, column, index)
-        if column < 2:
-          model.setData(child, "[No name]", Qt.EditRole)
-        elif column < 4:
-          model.setData(child, Qt.Unchecked, Qt.CheckStateRole)
+    if not model.insertRow(0, index):
+      return
 
-        if model.headerData(column, Qt.Horizontal) is None:
-            model.setHeaderData(column, Qt.Horizontal, "[No header]",
-                    Qt.EditRole)
+    # Update data for new entry (4 visible columns and 1 hidden = user data)
+    for column in range(model.columnCount(index)):
+      child = model.index(0, column, index)
+      if column < 2:
+        # Name and description
+        model.setData(child, "[No name]", Qt.EditRole)
+      elif column < 4:
+        # Source or destination check-boxes
+        model.setData(child, Qt.Unchecked, Qt.CheckStateRole)
+      else:
+        # User data
+        axes = self.vtk_widget.createNewActor()
+        self.vtk_widget.addActor(axes)
+        model.setData(child, axes, Qt.UserRole)
+      if model.headerData(column, Qt.Horizontal) is None:
+        model.setHeaderData(column, Qt.Horizontal, "[No header]",
+                            Qt.EditRole)
 
     self.treeView.selectionModel().setCurrentIndex(model.index(0, 0, index),
-            QItemSelectionModel.ClearAndSelect)
+                                                   QItemSelectionModel.ClearAndSelect)
     self.updateActions()
 
-  def insertColumn(self):
-      model = self.treeView.model()
-      column = self.treeView.selectionModel().currentIndex().column()
-
-      changed = model.insertColumn(column + 1)
-      if changed:
-          model.setHeaderData(column + 1, Qt.Horizontal, "[No header]",
-                  Qt.EditRole)
-
-      self.updateActions()
-
-      return changed
-
   def insertRow(self):
-      index = self.treeView.selectionModel().currentIndex()
-      model = self.treeView.model()
+    index = self.treeView.selectionModel().currentIndex()
+    model = self.treeView.model()
 
-      if not model.insertRow(index.row()+1, index.parent()):
-          return
+    if not model.insertRow(index.row()+1, index.parent()):
+      return
 
-      self.updateActions()
+    self.updateActions()
 
-      for column in range(model.columnCount(index.parent())):
-          child = model.index(index.row()+1, column, index.parent())
-          model.setData(child, "[No data]", Qt.EditRole)
-
-  def removeColumn(self):
-      model = self.treeView.model()
-      column = self.treeView.selectionModel().currentIndex().column()
-
-      changed = model.removeColumn(column)
-      if changed:
-          self.updateActions()
-
-      return changed
+    for column in range(model.columnCount(index.parent())):
+      child = model.index(index.row()+1, column, index.parent())
+      if column < 2:
+        model.setData(child, "[No name]", Qt.EditRole)
+      elif column < 4:
+        model.setData(child, Qt.Unchecked, Qt.CheckStateRole)
+      else:
+        axes = self.vtk_widget.createNewActor()
+        self.vtk_widget.addActor(axes)
+        model.setData(child, axes, Qt.UserRole)
 
   def removeRow(self):
       index = self.treeView.selectionModel().currentIndex()
       model = self.treeView.model()
-
+      item = model.getItem(index)
       if (model.removeRow(index.row(), index.parent())):
-          self.updateActions()
+        actor = item.itemData[4]
+        self.vtk_widget.removeActor(actor)
+        self.updateActions()
+
+  def updateGlyph(self, item):
+    self.vtk_widget.interactor.Disable()
+    axes = item.itemData[4]
+    if axes is not None:
+      if item.isSource():
+        newColorX = colors.GetColor3d('darkslategray')
+        newColorY = colors.GetColor3d('darkslategray')
+        newColorZ = colors.GetColor3d('darkslategray')
+      elif item.isDest():
+        newColorX = colors.GetColor3d('lightslategray')
+        newColorY = colors.GetColor3d('lightslategray')
+        newColorZ = colors.GetColor3d('lightslategray')
+      else:
+        newColorX = vtk.vtkColor3d(1.0,0.0,0.0)
+        newColorY = vtk.vtkColor3d(0.0,1.0,0.0)
+        newColorZ = vtk.vtkColor3d(0.0,0.0,1.0)
+
+      axes.GetXAxisShaftProperty().SetColor(newColorX)
+      axes.GetYAxisShaftProperty().SetColor(newColorY)
+      axes.GetZAxisShaftProperty().SetColor(newColorZ)
+      axes.GetXAxisTipProperty().SetColor(newColorX)
+      axes.GetYAxisTipProperty().SetColor(newColorY)
+      axes.GetZAxisTipProperty().SetColor(newColorZ)
+
+      self.vtk_widget.interactor.Enable()
+      self.vtk_widget.render_window.Render()
 
   def updateFrames(self, topLeft, bottomRight, role):
     if topLeft == bottomRight:
-      if role[0] == Qt.CheckStateRole:
-        print("check-state change")
-        index = topLeft
-        model = self.treeView.model()
-        axes  = model.data(index, Qt.UserRole)
-        checked = model.data(index, Qt.CheckStateRole)
-        if checked:
-          self.vtk_widget.interactor.Disable()
-          bum(axes)
-          self.vtk_widget.interactor.Enable()
-          self.vtk_widget.render_window.Render()
+      index = topLeft
+      if index.isValid():
+        if len(role) > 0:
+          if role[0] == Qt.CheckStateRole:
+            index = topLeft
+            model = self.treeView.model()
+            item  = model.getItem(index)
+            self.updateGlyph(item)
 
 
   def updateActions(self):
       hasSelection = not self.treeView.selectionModel().selection().isEmpty()
       self.removeRowAction.setEnabled(hasSelection)
-      self.removeColumnAction.setEnabled(hasSelection)
+      #self.removeColumnAction.setEnabled(hasSelection)
 
       hasCurrent = self.treeView.selectionModel().currentIndex().isValid()
       self.insertRowAction.setEnabled(hasCurrent)
-      self.insertColumnAction.setEnabled(hasCurrent)
+      #self.insertColumnAction.setEnabled(hasCurrent)
 
       if hasCurrent:
           self.treeView.closePersistentEditor(self.treeView.selectionModel().currentIndex())
@@ -206,105 +209,30 @@ class ViewersApp(QMainWindow, ui):
               self.statusBar().showMessage("Position: (%d,%d) in top level" % (row, column))
           model = self.treeView.model()
           index = self.treeView.selectionModel().currentIndex()
-          data = model.data(index, Qt.UserRole)
+          item = model.getItem(index)
+          if item is not None:
+            self.updateTable(item)
 
-
-          # Color the picked axes
-          self.vtk_widget.interactor.Disable()
-
-          # #* Axes
-          axes_length = 200
-          data.SetTotalLength(axes_length, axes_length, axes_length)
-
-          self.vtk_widget.interactor.Enable()
-          self.vtk_widget.render_window.Render()
-
+  def updateTable(self, item):
+    axes = item.itemData[4]
+    arr = np.diag(np.ones(4))
+    transform = axes.GetUserTransform()
+    if transform is not None:
+      mat = transform.GetMatrix()
+      for i in range(4):
+        for j in range(4):
+          arr[i,j] = mat.GetElement(i,j)
+    self.affineTransform.setAllData(arr)
   def initialize(self):
     self.vtk_widget.start()
 
-  def onAddFrameClicked(self):
-    row = self.treeView.selectionModel().currentIndex().row()
-    column = self.treeView.selectionModel().currentIndex().column()
-    print("(%d, %d)" % (row, column))
-
-    bum = self.affineTransform.getData()
-
-    self.vtk_widget.addAxes(bum)
-
-colors = vtk.vtkNamedColors()
-
-# Not working
-class MouseInteractorHighLightTwoActors(vtk.vtkInteractorStyleTrackballCamera):
-
-  def __init__(self, parent=None):
-    self.AddObserver("LeftButtonPressEvent", self.leftButtonPressEvent)
-
-    self.firstActor = None
-    self.secondActor = None
-    self.firstProperty = vtk.vtkProperty()
-    self.secondProperty = vtk.vtkProperty()
-    self.nPicked = 0
-
-  def leftButtonPressEvent(self, obj, event):
-    self.NewPickedActor = None
-    if 0:
-      clickPos = self.GetInteractor().GetEventPosition()
-      print(clickPos)
-      picker = vtk.vtkPropPicker()
-      picker.Pick(clickPos[0], clickPos[1], 0, self.GetDefaultRenderer())
-      # Get the new actor (not working)
-      self.NewPickedActor = picker.GetActor()
-    elif 0:
-      # World-point picker - gives coordinates
-      self.GetInteractor().GetPicker().Pick(self.GetInteractor().GetEventPosition()[0],
-                                            self.GetInteractor().GetEventPosition()[1],
-                                            0,
-                                            self.GetInteractor().GetRenderWindow().GetRenderers().GetFirstRenderer())
-      picked = self.GetInteractor().GetPicker().GetPickPosition()
-      print(picked)
-
-      picker = vtk.vtkPropPicker()
-      picker.Pick(self.GetInteractor().GetEventPosition()[0],
-                  self.GetInteractor().GetEventPosition()[1],
-                  0,
-                  self.GetInteractor().GetRenderWindow().GetRenderers().GetFirstRenderer())
-      self.NewPickedActor = picker.GetActor()
-    else:
-      # Cell-picker
-      self.GetInteractor().GetPicker().Pick(self.GetInteractor().GetEventPosition()[0],
-                                            self.GetInteractor().GetEventPosition()[1],
-                                            0,
-                                            self.GetInteractor().GetRenderWindow().GetRenderers().GetFirstRenderer())
-      self.NewPickedActor = self.GetInteractor().GetPicker().GetActor()
-      print(self.NewPickedActor)
-
-
-    # If something was selected
-    if self.NewPickedActor is not None:
-      print("actor is picked")
-      if self.NewPickedActor == self.firstActor:
-        self.firstActor.GetXAxisShaftProperty().DeepCopy(self.firstProperty)
-        self.nPicked = self.nPicked - 1
-        self.firstActor = None
-      elif self.NewPickedActor == self.secondActor:
-        self.secondActor.GetXAxisShaftProperty().DeepCopy(self.secondProperty)
-        self.nPicked = self.nPicked - 1
-        self.secondActor = None
-      else:
-        if (self.nPicked == 1):
-          self.secondProperty.DeepCopy(self.NewPickedActor.GetXAxisShaftProperty())
-          self.NewPickedActor.GetXAxisShaftProperty().SetColor(colors.GetColor3d('Black'))
-          self.secondActor = self.NewPickedActor
-          self.nPicked = self.nPicked + 1
-        elif (self.nPicked == 0):
-          self.firstProperty.DeepCopy(self.NewPickedActor.GetXAxisShaftProperty())
-          self.NewPickedActor.GetXAxisShaftProperty().SetColor(colors.GetColor3d('Gray'))
-          self.firstActor = self.NewPickedActor
-          self.nPicked = self.nPicked + 1
-
-    self.OnLeftButtonDown()
-    return
-
+  def onUpdateClicked(self):
+    index = self.treeView.selectionModel().currentIndex()
+    if index.isValid():
+      item = self.treeModel.getItem(index)
+      aff = self.affineTransform.getData()
+      axes = item.itemData[4]
+      self.vtk_widget.moveAxes(axes, aff)
 
 class QMeshViewer(QtWidgets.QFrame):
   def __init__(self, parent):
@@ -320,7 +248,6 @@ class QMeshViewer(QtWidgets.QFrame):
     self.platformThickness:float = 2.0
     self.gridBottomHeight:float = 0.15
     self.gridSize:np.uint16 = 10
-    #self.clickPositionZ:float = 0.0
 
     # Make the actual QtWidget a child so that it can be re_parented
     self.interactor = QVTKRenderWindowInteractor(self)
@@ -334,7 +261,7 @@ class QMeshViewer(QtWidgets.QFrame):
     self.initAxes()
     self.resetCamera()
 
-    self.style = MouseInteractorHighLightTwoActors()
+    self.style = vtk.vtkInteractorStyleTrackballCamera()
     self.style.SetDefaultRenderer(self.renderer)
     self.interactor.SetInteractorStyle(self.style)
 
@@ -353,12 +280,9 @@ class QMeshViewer(QtWidgets.QFrame):
     self.render_window = self.interactor.GetRenderWindow()
     self.render_window.AddRenderer(self.renderer)
 
-    #self.worldPointPicker = vtk.vtkWorldPointPicker()
-    #self.interactor.SetPicker(self.worldPointPicker)
     self.cellPicker = vtk.vtkCellPicker()
     self.cellPicker.SetTolerance(30.0)
     self.interactor.SetPicker(self.cellPicker)
-
 
     #* Top background color
     bg_t = np.ones(3)*245.0/255.0
@@ -370,8 +294,7 @@ class QMeshViewer(QtWidgets.QFrame):
     self.renderer.SetBackground2(bg_b)
     self.renderer.GradientBackgroundOn()
 
-  def initAxes(self):
-    # #* Axes
+  def createNewActor(self):
     axes = vtk.vtkAxesActor()
     axes_length = 50.0
     axes_label_font_size = np.int16(20)
@@ -385,6 +308,11 @@ class QMeshViewer(QtWidgets.QFrame):
     axes.GetYAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
     axes.GetZAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
     axes.PickableOn()
+    return axes
+
+  def initAxes(self):
+    # #* Axes
+    axes = self.createNewActor()
     self.axes = axes
     self.renderer.AddActor(self.axes)
 
@@ -461,74 +389,15 @@ class QMeshViewer(QtWidgets.QFrame):
     line.GetPointIds().SetId(1, id_2)
     cells.InsertNextCell(line)
 
-  def initSceneOld(self):
-    qDebug('initSceneOld()')
-
-    # set up my VTK Visualization pipeline
-    # cut-and-paste from https://lorensen.github.io/VTKExamples/site/Python/GeometricObjects/Sphere/
-
-    # Create a sphere
-    sphereSource = vtk.vtkSphereSource()
-    sphereSource.SetCenter(0.0,0.0,0.0)
-    sphereSource.SetRadius(5.0)
-    # Make the surface smooth
-    sphereSource.SetPhiResolution(100)
-    sphereSource.SetThetaResolution(100)
-
-    # Create a mapper
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(sphereSource.GetOutputPort())
-
-    # Create an actor
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetColor(colors.GetColor3d("Cornsilk"))
-    actor.GetProperty().SetRepresentation(0)
-    actor.GetProperty().SetDiffuseColor(colors.GetColor3d("Cornsilk"))
-    actor.GetProperty().SetDiffuse(0.8)
-    actor.GetProperty().SetSpecular(0.5)
-    actor.GetProperty().SetSpecularColor(1.,1.,1.)
-    actor.GetProperty().SetSpecularPower(30.)
-
-    renderer =  vtk.vtkOpenGLRenderer()
-    render_window = self.interactor.GetRenderWindow()
-    render_window.AddRenderer(renderer)
-
-    # TEST
-    # interactor.SetRenderWindow(render_window)
-    #render_window.SetInteractor(interactor)
-
-    renderer.AddActor(actor)
-    renderer.SetBackground(colors.GetColor3d("DarkGreen"))
-
-    self.render_window = render_window
-    self.renderer = renderer
-    self.sphere = sphereSource
-    self.actor = actor
-
   def start(self):
     self.interactor.Initialize()
-    # If a big Qt application call app.exec instead
+    # If a big Qt application, call app.exec instead of having two GUI threads
     self.interactor.Start()
 
-  def addAxes(self, aff):
+  def moveAxes(self, axes, aff):
     self.interactor.Disable()
 
-    # #* Axes
-    axes = vtk.vtkAxesActor()
-    axes_length = 50.0
-    axes_label_font_size = np.int16(20)
-    axes.SetTotalLength(axes_length, axes_length, axes_length)
-    axes.SetCylinderRadius(0.01)
-    axes.SetShaftTypeToCylinder()
-    axes.GetXAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
-    axes.GetYAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
-    axes.GetZAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
-    axes.GetXAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
-    axes.GetYAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
-    axes.GetZAxisCaptionActor2D().GetCaptionTextProperty().SetFontSize(axes_label_font_size)
-    axes.PickableOn()
-
+    # Axes
     transform = vtk.vtkTransform()
     mat = vtk.vtkMatrix4x4()
     for i in range(4):
@@ -536,22 +405,19 @@ class QMeshViewer(QtWidgets.QFrame):
         mat.SetElement(i,j,aff[i,j])
     transform.SetMatrix(mat)
     axes.SetUserTransform(transform)
-
-    self.renderer.AddActor(axes)
     self.interactor.Enable()
     self.render_window.Render()
 
-  def Switch_Mode(self, new_value):
-    self.actor.GetProperty().SetRepresentation(new_value)
+  def removeActor(self, actor):
+    self.interactor.Disable()
+    self.renderer.RemoveActor(actor)
+    self.interactor.Enable()
     self.render_window.Render()
 
-  def button_event(self, new_value):
-    if new_value:
-      print("Button was clicked")
-
-  def set_Resolution(self, new_value):
-    self.sphere.SetPhiResolution(new_value)
-    self.sphere.SetThetaResolution(new_value)
+  def addActor(self, actor):
+    self.interactor.Disable()
+    self.renderer.AddActor(actor)
+    self.interactor.Enable()
     self.render_window.Render()
 
 if __name__ == '__main__':

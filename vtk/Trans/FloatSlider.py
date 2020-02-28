@@ -14,6 +14,7 @@ class QFloatSlider(QSlider):
     super(QFloatSlider,self).__init__(parent)
     self.floatMin   = 0.0
     self.floatRange = 1.0
+    self.setFloatValue(0.5)
     self.valueChanged.connect(self.notifyValueChanged)
     
   @pyqtSlot(int, name='notifyValueChanged')

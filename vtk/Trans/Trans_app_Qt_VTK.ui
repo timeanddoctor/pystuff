@@ -175,7 +175,7 @@
                   <item>
                    <layout class="QHBoxLayout" name="horizontalLayout_2">
                     <item>
-                     <widget class="QPushButton" name="btnAddFrame">
+                     <widget class="QPushButton" name="btnUpdate">
                       <property name="text">
                        <string>Update</string>
                       </property>
@@ -247,10 +247,8 @@
      <string>&amp;Actions</string>
     </property>
     <addaction name="insertRowAction"/>
-    <!-- <addaction name="insertColumnAction"/> -->
     <addaction name="separator"/>
     <addaction name="removeRowAction"/>
-    <!-- <addaction name="removeColumnAction"/> -->
     <addaction name="separator"/>
     <addaction name="insertChildAction"/>
    </widget>
@@ -262,19 +260,9 @@
     <string>Insert row</string>
    </property>
   </action>
-  <action name="insertColumnAction">
-   <property name="text">
-    <string>Insert column</string>
-   </property>
-  </action>
   <action name="removeRowAction">
    <property name="text">
     <string>Remove row</string>
-   </property>
-  </action>
-  <action name="removeColumnAction">
-   <property name="text">
-    <string>Remove column</string>
    </property>
   </action>
   <action name="insertChildAction">
