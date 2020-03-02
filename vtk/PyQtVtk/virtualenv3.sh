@@ -6,3 +6,5 @@ python3 -m virtualenv -p /usr/bin/python3 .virtualenv
 .virtualenv/bin/python -m pip install vtk
 .virtualenv/bin/python -m pip install pyside2
 .virtualenv/bin/python -m pip install qtpy
+.virtualenv/bin/python -m pip install ipykernel
+.virtualenv/bin/python -m pip install pyopengl
