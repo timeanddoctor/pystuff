@@ -4,6 +4,19 @@ from qtpy.QtCore import QObject, QUrl, qDebug, qCritical, QFileInfo, QEvent, Qt,
 from qtpy.QtGui import QSurfaceFormat, QColor, QMouseEvent, QWheelEvent, QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat, QOpenGLFunctions
 from qtpy.QtQuick import QQuickFramebufferObject
 
+# For pyqt5 use
+# import sys
+# from PyQt5 import Qt, QtWidgets, QtOpenGL
+# app = QtWidgets.QApplication(sys.argv)
+# glw = QtOpenGL.QGLWidget()
+# glw.glInit()
+# ctx = Qt.QOpenGLContext.currentContext()
+# sf = Qt.QSurfaceFormat()
+# sf.setVersion(4,1)
+# sf.setProfile(Qt.QSurfaceFormat.CoreProfile)
+# prof = Qt.QOpenGLVersionProfile(sf) # Give QSurfaceFormat
+# QOpenGLFunctions = ctx.versionFunctions(prof)
+
 import logging
 import vtk
 from OpenGL import GL
