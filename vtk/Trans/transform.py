@@ -289,7 +289,7 @@ class TreeModel(QAbstractItemModel):
 
     column = self.columnCount(index.parent()) - 3
     child = self.index(index.row()+1, column, index.parent())
-    self.setData(child, Qt.Checked, Qt.CheckStateRole)
+    self.setData(child, Qt.Unchecked, Qt.CheckStateRole)
 
     column = self.columnCount(index.parent()) - 2
     child = self.index(index.row()+1, column, index.parent())

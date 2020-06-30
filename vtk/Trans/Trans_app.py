@@ -15,7 +15,7 @@ colors = vtk.vtkNamedColors()
 
 class ViewersApp(QMainWindow, ui):
   def __init__(self):
-    #Parent constructor
+    # Parent constructor
     super(ViewersApp, self).__init__()
     self.vtk_widget = None
     self.setup()
