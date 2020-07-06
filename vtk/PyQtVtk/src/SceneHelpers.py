@@ -1,4 +1,5 @@
-from PySide2.QtCore import qDebug, qCritical
+from qtpy.QtCore import qDebug, qCritical
+#from PySide2.QtCore import qDebug, qCritical
 import numpy as np
 import vtk
 

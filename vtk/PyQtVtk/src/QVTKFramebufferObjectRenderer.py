@@ -1,7 +1,14 @@
 from qt import Signal
 
 from qtpy.QtCore import QObject, QUrl, qDebug, qCritical, QFileInfo, QEvent, Qt, QSize, Signal
-from qtpy.QtGui import QSurfaceFormat, QColor, QMouseEvent, QWheelEvent, QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat, QOpenGLFunctions
+from qtpy.QtGui import QSurfaceFormat, QColor, QMouseEvent, QWheelEvent, QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+
+# Obsolete
+#from qtpy.QtGui import QOpenGLFunctions
+# use instead
+import OpenGL.GL as gl
+
+
 from qtpy.QtQuick import QQuickFramebufferObject
 
 # For pyqt5 use
@@ -48,7 +55,8 @@ class RendererHelper(QObject):
       qDebug('RendererHelper::__init__()')
       super().__init__()
       self.__m_vtkFboItem = None
-      self.gl = QOpenGLFunctions()
+      #self.gl = QOpenGLFunctions()
+      self.gl = gl
 
       self.__m_mouseLeftButton:QMouseEvent = None
       self.__m_mouseEvent:QMouseEvent = None
