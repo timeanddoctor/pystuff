@@ -41,7 +41,7 @@ volumeProperty.SetColor(volumeColor)
 volumeProperty.SetScalarOpacity(volumeScalarOpacity)
 volumeProperty.SetGradientOpacity(volumeGradientOpacity)
 volumeProperty.SetInterpolationTypeToLinear()
-#volumeProperty.ShadeOn()
+volumeProperty.ShadeOff()
 #volumeProperty.SetAmbient(0.4)
 #volumeProperty.SetDiffuse(0.6)
 #volumeProperty.SetSpecular(0.2)
@@ -72,6 +72,7 @@ planeWidget.GetPlaneProperty().SetColor( .2, .8, 0.1 )#//Set color
 planeWidget.GetPlaneProperty().SetOpacity( 0.5 )#//Set transparency
 planeWidget.GetHandleProperty().SetColor( 0, .4, .7 )#//Set plane vertex color
 planeWidget.GetHandleProperty().SetLineWidth( 1.5 )#//Set plane lineweight
+
 planeWidget.NormalToZAxisOn()#//Initial normal direction parallel to Z axis
 planeWidget.SetRepresentationToWireframe()#//Planes display as mesh properties
 planeWidget.SetCenter( volume.GetCenter() )#//Set plane coordinates

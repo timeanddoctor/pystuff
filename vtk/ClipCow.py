@@ -5,6 +5,7 @@
 # the resulting complex polygons.
 
 import vtk
+import os
 from vtk.util.misc import vtkGetDataRoot
 from vtk.util.colors import peacock, tomato, red
 VTK_DATA_ROOT = vtkGetDataRoot()
@@ -12,7 +13,12 @@ VTK_DATA_ROOT = '/home/jmh/git/VTKExamples/src/Testing'
 # First start by reading a cow model. We also generate surface normals for
 # prettier rendering.
 cow = vtk.vtkBYUReader()
-cow.SetGeometryFileName(VTK_DATA_ROOT + "/Data/cow.g")
+
+if os.name == 'nt':
+  cow.SetGeometryFileName('e:/code/bin/VTK/ExternalData/Testing/Data/Viewpoint/cow.g')
+else:
+  cow.SetGeometryFileName(VTK_DATA_ROOT + "/Data/cow.g")
+
 cowNormals = vtk.vtkPolyDataNormals()
 cowNormals.SetInputConnection(cow.GetOutputPort())
 

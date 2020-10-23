@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import os
+import sys
+
+# TODO: Use pyside2uic to compile stuff
 
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.uic import loadUiType
@@ -124,7 +127,7 @@ class DicomVis(QMainWindow, ui):
     self.reader.SetDirectoryName(studyPath)
     self.reader.Update()
 
-    self.xyMapper = vtk.vtk
+    #self.xyMapper = vtk.vtk
 
     # Get data dimensionality
     self.dataExtent = self.reader.GetDataExtent()
@@ -193,12 +196,14 @@ class DicomVis(QMainWindow, ui):
       x.Render()
 
 if __name__ == "__main__":
-  import sys
   app = QtWidgets.QApplication(sys.argv)
   window = DicomVis()
   window.show()
 
-  studyPath = "/home/jmh/github/ITKexample/data/CTbrain/"
+  if os.name == 'nt':
+    studyPath = "e:/github/ITKexample/data/CTbrain/"
+  else:
+    studyPath = "/home/jmh/github/ITKexample/data/CTbrain/"
   window.load_study_from_path(studyPath)
   sys.exit(app.exec_())
 
