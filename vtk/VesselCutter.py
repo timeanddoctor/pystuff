@@ -57,14 +57,25 @@ plane.SetOrigin(bounds[0], bounds[2], center[2])
 plane.SetNormal(0, 0, 1)
 plane.Modified()
 
+def BeginInteraction(obj,ev):
+  print('Begin Interaction')
+
+def EndInteraction(obj,ev):
+  print('End Interaction')
+
 planeWidget = vtk.vtkPlaneWidget()
 planeWidget.SetInputData(polydata)
 planeWidget.NormalToZAxisOn()
 planeWidget.SetInteractor(renderWindow.GetInteractor())
+planeWidget.AddObserver("EnableEvent", BeginInteraction)
+planeWidget.AddObserver("StartInteractionEvent", BeginInteraction)
+planeWidget.AddObserver("InteractionEvent", EndInteraction)
+
 planeWidget.SetEnabled(0)
 planeWidget.SetOrigin(bounds[0], bounds[2], center[2])
 planeWidget.SetPoint1(bounds[0], bounds[3], center[2])
 planeWidget.SetPoint2(bounds[1], bounds[2], center[2])
+planeWidget.Modified()
 prop = planeWidget.GetPlaneProperty()
 prop.SetColor( .2, .8, 0.1 )
 #prop.SetOpacity( 0.5 )#//Set transparency
@@ -85,6 +96,36 @@ renderer.ResetCamera()
 def KeyPress(obj, ev):
   global normals, lastActor
   key = obj.GetKeySym()
+  if key == 'r':
+    if (lastActor is not None):
+      renderer.RemoveActor(lastActor)
+      lastActor = None
+
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputConnection(reader.GetOutputPort())
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(normals.GetOutputPort())
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    prop = actor.GetProperty()
+    prop.SetColor(colors.GetColor3d("Red"))
+    prop.SetInterpolationToFlat()
+    renderer.AddActor(actor)
+    lastActor = actor
+    # TODO: Update normals
+    renderWindowInteractor.Enable()
+    renderWindow.Render()
+  if key == 'p':
+    # Reset plane position
+    planeWidget.SetEnabled(0)
+    planeWidget.SetOrigin(bounds[0], bounds[2], center[2])
+    planeWidget.SetPoint1(bounds[0], bounds[3], center[2])
+    planeWidget.SetPoint2(bounds[1], bounds[2], center[2])
+    planeWidget.Modified()
+    planeWidget.SetEnabled(1)
+    return
   if key == 'c':
     # Implicit function for clipping
     plane = vtk.vtkPlane()

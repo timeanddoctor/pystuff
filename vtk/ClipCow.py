@@ -134,6 +134,7 @@ iren.SetRenderWindow(renWin)
 # Add the actors to the renderer, set the background and size
 ren.AddActor(clipActor)
 ren.AddActor(cutActor)
+# We want clipActor + cutActor
 ren.AddActor(restActor)
 ren.AddActor(edgeActor)
 

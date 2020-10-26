@@ -2,6 +2,25 @@ import sys
 import vtk
 import numpy as np
 
+def polyInfo(filter):
+  """
+  Debug information about output from vtkPolyData producing filters
+  """
+  filter.Update()
+  output = filter.GetOutput()
+  print("Polydata after: %s" % (filter.GetClassName()))
+  print("\tLines: %d" % (output.GetNumberOfLines()))
+  print("\tPoints: %d" % (output.GetNumberOfPoints()))
+  print("\tCells: %d" % (output.GetNumberOfCells()))
+  print("\tPieces: %d" % (output.GetNumberOfPieces()))
+  print("\tStrips: %d" % (output.GetNumberOfStrips()))
+  print("\tPolys: %d" % (output.GetNumberOfPolys()))
+  print("\tVerts: %d" % (output.GetNumberOfVerts()))
+  # Do we have normals?
+  # .GetOutput().GetPointData().GetArray("Normals")
+  # .GetNormals()
+  # .GetVectors()
+
 def vtkRotationMovie(renderWindow, filename='c:/test.avi'):
   global degrees
   degrees = 0
