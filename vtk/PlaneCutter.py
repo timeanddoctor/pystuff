@@ -16,7 +16,8 @@ reader.SetFileName(fileName)
 
 imageData = reader.GetOutput()
 
-volumeMapper = vtk.vtkFixedPointVolumeRayCastMapper()
+#volumeMapper = vtk.vtkFixedPointVolumeRayCastMapper()
+volumeMapper = vtk.vtkGPUVolumeRayCastMapper()
 volumeMapper.SetInputConnection(reader.GetOutputPort())
 
 volumeColor = vtk.vtkColorTransferFunction()
