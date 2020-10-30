@@ -1,6 +1,6 @@
 import os
-os.environ['QT_API'] = 'pyqt5'
-#os.environ['QT_API'] = 'pyside2' # Need some refactoring
+#os.environ['QT_API'] = 'pyqt5'
+os.environ['QT_API'] = 'pyside2' # Need some refactoring
 
 from qtpy import QtCore, QtGui, QtQuick, QtQml
 

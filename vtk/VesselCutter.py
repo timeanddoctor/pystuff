@@ -1,6 +1,9 @@
+import os
 import vtk
 
 from vtkUtils import polyInfo
+
+filedir = os.path.dirname(os.path.realpath(__file__))
 
 def get_program_parameters():
   import argparse
@@ -22,7 +25,7 @@ renderWindowInteractor = vtk.vtkRenderWindowInteractor()
 renderWindowInteractor.SetRenderWindow(renderWindow)
 
 #filename = get_program_parameters()
-filename = 'e:/github/fis/data/Abdomen/ProperlyClosed.vtp'
+filename = os.path.join(filedir, '../../fis/data/Abdomen/ProperlyClosed.vtp')
 
 reader = vtk.vtkXMLPolyDataReader()
 reader.SetFileName(filename)

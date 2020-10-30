@@ -1,3 +1,4 @@
+import os
 import vtk
 
 from vtkUtils import polyInfo
@@ -24,8 +25,8 @@ iren = vtk.vtkRenderWindowInteractor()
 iren.SetRenderWindow(renWin)
 
 #filename = get_program_parameters()
-filename = 'e:/github/fis/data/Abdomen/CT-Abdomen.mhd'
-
+#filename = 'e:/github/fis/data/Abdomen/CT-Abdomen.mhd'
+filename = os.path.join('../../fis/data/Abdomen', 'CT-Abdomen.mhd')
 reader = vtk.vtkMetaImageReader()
 reader.SetFileName(filename)
 reader.Update()
