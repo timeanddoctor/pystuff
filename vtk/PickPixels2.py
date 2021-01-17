@@ -1,7 +1,5 @@
 import vtk
-
-
-imageViewer = vtk.vtkImageViewer2()
+import sys
 
 class vtkImageInteractionCallback(object):
   def __init__(self):
@@ -40,7 +38,7 @@ class vtkImageInteractionCallback(object):
       return
     pos = self.Picker.GetPickPosition()
     axis = self.Viewer.GetSliceOrientation()
-    image_coordinates = [0,0,0]
+    image_coordinates = [0, 0, 0]
     if axis == vtk.vtkImageViewer2.SLICE_ORIENTATION_XZ:
       image_coordinates[0] = int(vtk.vtkMath.Round(pos[0]))
       image_coordinates[1] = int(self.Viewer.GetSlice())
@@ -62,14 +60,13 @@ class vtkImageInteractionCallback(object):
     message = message + " )\nValue: ( "
 
     # We convert everything to float
-    message = vtkValueMessageTemplate(image, image_coordinates, message)
+    message = valueMessage(image, image_coordinates, message)
 
     self.Annotation.SetText(0, message)
     interactor.Render()
     style.OnMouseMove()
 
-def vtkValueMessageTemplate(image, pos, message):
-  # Type is given as an argument instead of vtkTemplateMacro sets it
+def valueMessage(image, pos, message):
   nComponents = image.GetNumberOfScalarComponents()
   for i in range(nComponents):
     message = message + str(image.GetScalarComponentAsFloat(pos[0], pos[1], pos[2], i))
@@ -77,93 +74,91 @@ def vtkValueMessageTemplate(image, pos, message):
       message = message + ", "
   message = message + " )"
   return message
-if 0:
-  noiseSource = vtk.vtkImageNoiseSource()
-  noiseSource.SetWholeExtent(0, 512, 0, 512, 0, 0)
-  noiseSource.SetMinimum(0.0)
-  noiseSource.SetMaximum(65535.0)
 
-  # cast noise image to unsigned short
-  imageCast = vtk.vtkImageCast()
-  imageCast.SetInputConnection(noiseSource.GetOutputPort())
-  imageCast.SetOutputScalarTypeToUnsignedShort()
-  imageCast.Update()
-  # connect to image viewer pipeline
-  imageViewer.SetInputConnection(imageCast.GetOutputPort())
-else:
-  # Parse input argument
-  inputFilename = "./TestPickPixel2.tiff"#argv[1]
+def main(argv):
+  imageViewer = vtk.vtkImageViewer2()
+  if len(argv) < 2:
+    noiseSource = vtk.vtkImageNoiseSource()
+    noiseSource.SetWholeExtent(0, 512, 0, 512, 0, 0)
+    noiseSource.SetMinimum(0.0)
+    noiseSource.SetMaximum(65535.0)
 
-  # Read the image
-  tiffReader = vtk.vtkTIFFReader()
-  if not tiffReader.CanReadFile(inputFilename):
-    print("hello")
-    #std::cout << argv[0] << ": Error reading file " << inputFilename
-    #            << std::endl;
-    #  return EXIT_FAILURE;
-  tiffReader.SetFileName(inputFilename)
+    # cast noise image to unsigned short
+    imageCast = vtk.vtkImageCast()
+    imageCast.SetInputConnection(noiseSource.GetOutputPort())
+    imageCast.SetOutputScalarTypeToUnsignedShort()
+    imageCast.Update()
+    # connect to image viewer pipeline
+    imageViewer.SetInputConnection(imageCast.GetOutputPort())
+  else:
+    # Parse input argument
+    inputFilename = str(argv[1])
 
-  # connect to image viewer pipeline
-  imageViewer.SetInputConnection(tiffReader.GetOutputPort())
+    # Read the image
+    tiffReader = vtk.vtkTIFFReader()
+    if not tiffReader.CanReadFile(inputFilename):
+      return
+    tiffReader.SetFileName(inputFilename)
 
-# Display the image
-#actor = vtk.vtkImageActor()
-#actor.GetMapper().SetInputConnection(color.GetOutputPort())
+    # connect to image viewer pipeline
+    imageViewer.SetInputConnection(tiffReader.GetOutputPort())
 
+  # Picker to pick pixels
+  propPicker = vtk.vtkPropPicker()
+  propPicker.PickFromListOn()
 
-# Picker to pick pixels
-propPicker = vtk.vtkPropPicker()
-propPicker.PickFromListOn()
+  # Give the picker a prop to pick
+  imageActor = imageViewer.GetImageActor()
+  propPicker.AddPickList(imageActor)
 
-# Give the picker a prop to pick
-imageActor = imageViewer.GetImageActor()
-propPicker.AddPickList(imageActor)
+  # disable interpolation, so we can see each pixel
+  imageActor.InterpolateOff()
 
-# disable interpolation, so we can see each pixel
-imageActor.InterpolateOff()
+  # Visualize
+  renderWindowInteractor = vtk.vtkRenderWindowInteractor()
+  imageViewer.SetupInteractor(renderWindowInteractor)
+  imageViewer.SetSize(600, 600)
 
-# Visualize
-renderWindowInteractor = vtk.vtkRenderWindowInteractor()
-imageViewer.SetupInteractor(renderWindowInteractor)
-imageViewer.SetSize(600, 600)
+  renderer = imageViewer.GetRenderer()
+  renderer.ResetCamera()
+  renderer.GradientBackgroundOn()
+  renderer.SetBackground(0.6, 0.6, 0.5)
+  renderer.SetBackground2(0.3, 0.3, 0.2)
 
-renderer = imageViewer.GetRenderer()
-renderer.ResetCamera()
-renderer.GradientBackgroundOn()
-renderer.SetBackground(0.6, 0.6, 0.5)
-renderer.SetBackground2(0.3, 0.3, 0.2)
+  # Annotate the image with window/level and mouse over pixel
+  # information
+  cornerAnnotation = vtk.vtkCornerAnnotation()
+  cornerAnnotation.SetLinearFontScaleFactor(2)
+  cornerAnnotation.SetNonlinearFontScaleFactor(1)
+  cornerAnnotation.SetMaximumFontSize(20)
+  cornerAnnotation.SetText(0, "Off Image")
+  cornerAnnotation.SetText(3, "<window>\n<level>")
+  cornerAnnotation.GetTextProperty().SetColor(1, 0, 0)
 
-# Annotate the image with window/level and mouse over pixel
-# information
-cornerAnnotation = vtk.vtkCornerAnnotation()
-cornerAnnotation.SetLinearFontScaleFactor(2)
-cornerAnnotation.SetNonlinearFontScaleFactor(1)
-cornerAnnotation.SetMaximumFontSize(20)
-cornerAnnotation.SetText(0, "Off Image")
-cornerAnnotation.SetText(3, "<window>\n<level>")
-cornerAnnotation.GetTextProperty().SetColor(1, 0, 0)
-
-imageViewer.GetRenderer().AddViewProp(cornerAnnotation)
+  imageViewer.GetRenderer().AddViewProp(cornerAnnotation)
 
 
-# Callback listens to MouseMoveEvents invoked by the interactor's style
-callback = vtkImageInteractionCallback()
-callback.SetViewer(imageViewer)
-callback.SetAnnotation(cornerAnnotation)
-callback.SetPicker(propPicker)
+  # Callback listens to MouseMoveEvents invoked by the interactor's style
+  callback = vtkImageInteractionCallback()
+  callback.SetViewer(imageViewer)
+  callback.SetAnnotation(cornerAnnotation)
+  callback.SetPicker(propPicker)
 
-# InteractorStyleImage allows for the following controls:
-# 1) middle mouse + move = camera pan
-# 2) left mouse + move = window/level
-# 3) right mouse + move = camera zoom
-# 4) middle mouse wheel scroll = zoom
-# 5) 'r' = reset window/level
-# 6) shift + 'r' = reset camera
-imageStyle = imageViewer.GetInteractorStyle()
-imageStyle.AddObserver('MouseMoveEvent', callback.Execute)
+  # InteractorStyleImage allows for the following controls:
+  # 1) middle mouse + move = camera pan
+  # 2) left mouse + move = window/level
+  # 3) right mouse + move = camera zoom
+  # 4) middle mouse wheel scroll = zoom
+  # 5) 'r' = reset window/level
+  # 6) shift + 'r' = reset camera
+  imageStyle = imageViewer.GetInteractorStyle()
+  imageStyle.AddObserver('MouseMoveEvent', callback.Execute)
 
-imageViewer.GetImageActor().GetMapper().SetInputConnection(tiffReader.GetOutputPort())
+  if len(argv) > 1:
+    imageViewer.GetImageActor().GetMapper().SetInputConnection(tiffReader.GetOutputPort())
 
-renderWindowInteractor.Initialize()
-renderWindowInteractor.Start()
+  renderWindowInteractor.Initialize()
+  renderWindowInteractor.Start()
 
+if __name__ == '__main__':
+  main(sys.argv)
