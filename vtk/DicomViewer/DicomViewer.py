@@ -78,8 +78,8 @@ class DicomVis(QMainWindow, ui):
     self.volRenWin = self.VolumeWidget.GetRenderWindow()
     self.volRenWin.AddRenderer(self.volRender)
 
-    self.volumeMapper = vtk.vtkFixedPointVolumeRayCastMapper()
-    #self.volumeMapper = vtk.vtkGPUVolumeRayCastMapper()
+    #self.volumeMapper = vtk.vtkFixedPointVolumeRayCastMapper()
+    self.volumeMapper = vtk.vtkGPUVolumeRayCastMapper()
 
     volumeColor = vtk.vtkColorTransferFunction()
     volumeColor.AddRGBPoint(0,    0.0, 0.0, 0.0)
@@ -202,6 +202,8 @@ if __name__ == "__main__":
 
   if os.name == 'nt':
     studyPath = "e:/github/ITKexample/data/CTbrain/"
+    studyPath = os.path.join(os.path.dirname(__file__),
+                             '../Data/CTbrain/')
   else:
     studyPath = "/home/jmh/github/ITKexample/data/CTbrain/"
   window.load_study_from_path(studyPath)
