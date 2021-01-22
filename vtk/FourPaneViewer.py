@@ -14,27 +14,15 @@ ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
-# Won't work on member function - dunno why
-#@vtk.calldata_type(vtk.VTK_OBJECT)
-def callback(widget, event):#, callData):
-  print(event)
-
-class MyClass:
-  def __init__(self):
-    from functools import partial
-    def nodeAddedCallback(self, caller, eventId):
-      print("Node added")
-      print("New node: {0}".format(callData.GetName()))
-    self.nodeAddedCallback = partial(nodeAddedCallback, self)
-    self.nodeAddedCallback.CallDataType = vtk.VTK_OBJECT
-  def registerCallbacks(self):
-    self.nodeAddedModifiedObserverTag = main_window.vtk_widgets[0].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, callback)
-
-  def unregisterCallbacks(self):
-    main_window.vtk_widgets[0].viewer.GetInteractorStyle().RemoveObserver(self.nodeAddedModifiedObserverTag)
-        
-
 use3D = True
+
+class OrientationObserver(object):
+  def __init__(self, widgets):
+    self.widgets = widgets
+
+  def __call__(self, caller, ev):
+    print(ev)
+
 
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
@@ -94,11 +82,8 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetRenderer().ResetCamera()
       self.vtk_widgets[i].viewer.GetInteractor().EnableRenderOn()
 
-    # Re-establish callbacks
-    #self.establishCallbacks()
-
-    self.myObject = MyClass()
-    self.myObject.registerCallbacks()
+    # Re-establish callbacks (why)
+    self.establishCallbacks()
 
     for i in range(3):
       self.vtk_widgets[i].interactor.Enable()
@@ -202,7 +187,8 @@ class FourPaneViewer(QMainWindow, ui):
         color[j] = color[j] / 4.0
       self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
       self.vtk_widgets[i].interactor.Disable() # TEST
-    #self.establishCallbacks()
+
+    self.establishCallbacks()
 
     self.vtk_widgets[0].show()
     self.vtk_widgets[1].show()
@@ -230,6 +216,10 @@ class FourPaneViewer(QMainWindow, ui):
 
   def establishCallbacks(self):
     # Establish callbacks - show I inherit from something
+
+    #self.vtk_widgets[0].viewer.GetInteractorStyle().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, OrientationObserver(self.vtk_widgets))    
+    self.vtk_widgets[0].viewer.GetInteractorStyle().AddObserver('WindowLevelEvent', OrientationObserver(self.vtk_widgets))    
+    return
     for i in range(1):
       # TODO: Figure out to call member function - do I need to inherit vtkInteractor?
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, callback) # ignored
