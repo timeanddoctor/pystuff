@@ -14,6 +14,28 @@ ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
+# Won't work on member function - dunno why
+#@vtk.calldata_type(vtk.VTK_OBJECT)
+def callback(widget, event):#, callData):
+  print(event)
+
+class MyClass:
+  def __init__(self):
+    from functools import partial
+    def nodeAddedCallback(self, caller, eventId):
+      print("Node added")
+      print("New node: {0}".format(callData.GetName()))
+    self.nodeAddedCallback = partial(nodeAddedCallback, self)
+    self.nodeAddedCallback.CallDataType = vtk.VTK_OBJECT
+  def registerCallbacks(self):
+    self.nodeAddedModifiedObserverTag = main_window.vtk_widgets[0].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, callback)
+
+  def unregisterCallbacks(self):
+    main_window.vtk_widgets[0].viewer.GetInteractorStyle().RemoveObserver(self.nodeAddedModifiedObserverTag)
+        
+
+use3D = True
+
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
@@ -28,19 +50,19 @@ class FourPaneViewer(QMainWindow, ui):
 
   def loadFile(self, fileName):
     # Load meta file
-    print("loading: %s" % fileName)
     reader = vtk.vtkMetaImageReader()
     reader.SetFileName(fileName)
     reader.Update()
     imageDims = reader.GetOutput().GetDimensions()
     for i in range(3):
       self.vtk_widgets[i].viewer.GetInteractor().EnableRenderOff()
-    #self.vtk_widgets[3].viewer.GetInteractor().EnableRenderOff()
 
-    # Turn-off plane widgets
-    for i in range(3):
-      print(i)
-      #self.planeWidget[i].Off()
+    if use3D:
+      self.vtk_widgets[3].EnableRenderOff()
+
+      # Turn-off plane widgets
+      for i in range(3):
+        self.planeWidget[i].Off()
 
     for i in range(3):
       rep = self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetRepresentation()
@@ -50,42 +72,41 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.SetSliceOrientation(i)
       self.vtk_widgets[i].viewer.SetResliceModeToAxisAligned()
 
-    # vtkRenderWindowInteractor *iren = this.ui.view3.GetInteractor()
-
-    for i in range(3):
-      if 0:
-        planeWidget[i].SetInteractor( iren )
-        planeWidget[i].RestrictPlaneToVolumeOn()  // Default
-        
-        planeWidget[i].TextureInterpolateOn()
-        planeWidget[i].SetResliceInterpolateToLinear()
-        planeWidget[i].SetInputConnection(reader.GetOutputPort())
-        planeWidget[i].SetPlaneOrientation(i)
-        planeWidget[i].SetSliceIndex(imageDims[i]/2)
-        planeWidget[i].DisplayTextOn()
-        
-        #TODO: Call SetWindowLevel() using statistics from data
-        planeWidget[i].UpdatePlacement()
-        planeWidget[i].GetInteractor().Enable()
-        planeWidget[i].On()
-        planeWidget[i].InteractionOn()
-      else:
-        print(i)
+    if use3D:
+      iren = self.vtk_widgets[3]
+      for i in range(3):
+        self.planeWidget[i].SetInteractor( iren )
+        self.planeWidget[i].RestrictPlaneToVolumeOn()
+          
+        self.planeWidget[i].TextureInterpolateOn()
+        self.planeWidget[i].SetResliceInterpolateToLinear()
+        self.planeWidget[i].SetInputConnection(reader.GetOutputPort())
+        self.planeWidget[i].SetPlaneOrientation(i)
+        self.planeWidget[i].SetSliceIndex(imageDims[i] // 2)
+        self.planeWidget[i].DisplayTextOn()
+          
+        self.planeWidget[i].UpdatePlacement()
+        self.planeWidget[i].GetInteractor().Enable()
+        self.planeWidget[i].On()
+        self.planeWidget[i].InteractionOn()
 
     for i in range(3):
       self.vtk_widgets[i].viewer.GetRenderer().ResetCamera()
       self.vtk_widgets[i].viewer.GetInteractor().EnableRenderOn()
 
+    # Re-establish callbacks
+    #self.establishCallbacks()
+
+    self.myObject = MyClass()
+    self.myObject.registerCallbacks()
+
     for i in range(3):
       self.vtk_widgets[i].interactor.Enable()
-    
-    # ppVTKOGLWidgets[3].GetInteractor().EnableRenderOn()
 
-    # Reset camera for the renderer - otherwise it is set using dummy data
-    # self.planeWidget[0].GetDefaultRenderer().ResetCamera()
-
-    # 
-    # this.ui.view3.GetInteractor().EnableRenderOn()
+    if use3D:
+      self.vtk_widgets[3].EnableRenderOn()
+      # Reset camera for the renderer - otherwise it is set using dummy data
+      self.planeWidget[0].GetDefaultRenderer().ResetCamera()
 
     # Update 3D
     self.ResetViews()
@@ -97,14 +118,14 @@ class FourPaneViewer(QMainWindow, ui):
 
     # Also sync the Image plane widget on the 3D top right view with any
     # changes to the reslice cursor.
-    for i in range(3):
-      print(i)
-      #ps = self.planeWidget[i].GetPolyDataAlgorithm()
-      #ps.SetNormal(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetNormal())
-      #ps.SetCenter(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetOrigin())
-
-      # If the reslice plane has modified, update it on the 3D widget
-      #self.planeWidget[i].UpdatePlacement()
+    if use3D:
+      for i in range(3):
+        ps = self.planeWidget[i].GetPolyDataAlgorithm()
+        ps.SetNormal(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetNormal())
+        ps.SetCenter(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetOrigin())
+      
+        # If the reslice plane has modified, update it on the 3D widget
+        self.planeWidget[i].UpdatePlacement()
 
     # Render in response to changes (omit this)
     self.Render()
@@ -112,7 +133,10 @@ class FourPaneViewer(QMainWindow, ui):
   def Render(self):
     for i in range(3):
       self.vtk_widgets[i].viewer.Render()
-    # Render 3D
+    if use3D:
+      # Render 3D
+      self.vtk_widgets[3].GetRenderWindow().Render()
+
   def SetResliceMode(self, mode):
     for i in range(3):
       self.vtk_widgets[i].viewer.SetResliceMode(mode)
@@ -127,102 +151,125 @@ class FourPaneViewer(QMainWindow, ui):
     loadAct.setStatusTip('Load data')
     loadAct.triggered.connect(self.onLoadClicked)
 
+    exitAct = QAction('&Exit', self)
+    exitAct.setShortcut('Ctrl+Q')
+    exitAct.setStatusTip('Exit application')
+    exitAct.triggered.connect(self.close)
+    
     menubar = self.menuBar()
     fileMenu = menubar.addMenu('&File')
     fileMenu.addAction(loadAct)    
-
-    quitAct = QAction("Quit", self)
-    quitAct.triggered.connect(self.closeEvent)
+    fileMenu.addAction(exitAct)
     
     self.vtk_widgets = [TestMe(self.vtk_panel,0),
                         TestMe(self.vtk_panel,1),
-                        TestMe(self.vtk_panel,2),
-                        TestMe(self.vtk_panel)]
+                        TestMe(self.vtk_panel,2)]
 
     # Make all views share the same cursor object
     for i in range(3):
-      self.vtk_widgets[i].SetResliceCursor(self.vtk_widgets[0].GetResliceCursor())
+      self.vtk_widgets[i].viewer.SetResliceCursor(self.vtk_widgets[0].viewer.GetResliceCursor())
 
-    # Make 3D viewer
-    picker = vtk.vtkCellPicker()
-    picker.SetTolerance(0.005)
+    if use3D:
+      # Make 3D viewer
+      picker = vtk.vtkCellPicker()
+      picker.SetTolerance(0.005)
+      
+      ipwProp = vtk.vtkProperty()
+      ren = vtk.vtkRenderer()
+      interactor = QVTKRenderWindowInteractor()
+      interactor.GetRenderWindow().AddRenderer(ren)
+      self.vtk_widgets.append(interactor)
 
-    ipwProp = vtk.vtkProperty()
-    ren = vtk.vtkRenderer()
-
-    interactor = QVTKRenderWindowInteractor()
-    #renderWindow = vtk.vtkGenericOpenGLRenderWindow()
-    #interactor.SetRenderWindow(renderWindow)
-
-    interactor.GetRenderWindow().AddRenderer(ren)
-    
-    self.planeWidget = []
-    for i in range(3):
-      if 0:
+      self.planeWidget = []
+      for i in range(3):
         pw = vtk.vtkImagePlaneWidget()
         pw.SetInteractor(interactor)
         pw.SetPicker(picker)
         pw.RestrictPlaneToVolumeOn()
-      color = [0.0,0.0,0.0]
-      color[i] = 1
-      #pw.GetPlaneProperty().SetColor(color)
-      for j in range(3):
-        color[j] = color[j] / 4.0
-      self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
-
-      if 0:
+        color = [0.0,0.0,0.0]
+        color[i] = 1
+        pw.GetPlaneProperty().SetColor(color)
         pw.SetTexturePlaneProperty(ipwProp)
         pw.TextureInterpolateOff()
         pw.SetResliceInterpolateToLinear()
         pw.DisplayTextOn()
         pw.SetDefaultRenderer(ren)
         self.planeWidget.append(pw)
+    for i in range(3):
+      color = [0.0,0.0,0.0]
+      color[i] = 1
+      for j in range(3):
+        color[j] = color[j] / 4.0
+      self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
+      self.vtk_widgets[i].interactor.Disable() # TEST
+    #self.establishCallbacks()
 
-    # Establish callbacks (TODO)
-    
     self.vtk_widgets[0].show()
     self.vtk_widgets[1].show()
     self.vtk_widgets[2].show()
+    #self.vtk_widgets[3].show()
 
     for i in range(3):
       self.vtk_widgets[i].viewer.GetImageActor().SetVisibility(False)
-      
-    self.horz_layout0 = QHBoxLayout()
-    # Vertical spliiter
-    self.vert_splitter = QSplitter(Qt.Vertical)
-    # Horizontal splitter 0
-    self.horz_splitter0 = QSplitter(Qt.Horizontal)
-    self.horz_splitter0.addWidget(self.vtk_widgets[0])
-    self.horz_splitter0.addWidget(self.vtk_widgets[1])
-    self.vert_splitter.addWidget(self.horz_splitter0)
-    # Horizontal splitter 1
-    self.horz_splitter1 = QSplitter(Qt.Horizontal)
-    self.horz_splitter1.addWidget(self.vtk_widgets[2])
-    #self.horz_splitter1.addWidget(self.vtk_widgets[3])
-    self.vert_splitter.addWidget(self.horz_splitter1)
 
-    # Add vertical spliiter to out layout
-    self.horz_layout0.addWidget(self.vert_splitter)
-    self.horz_layout0.setContentsMargins(0,0,0,0)
+    # Layouts
+    horz_layout0 = QHBoxLayout()
+    vert_splitter = QSplitter(Qt.Vertical)
+    horz_splitter0 = QSplitter(Qt.Horizontal)
+    horz_splitter0.addWidget(self.vtk_widgets[0])
+    horz_splitter0.addWidget(self.vtk_widgets[1])
+    vert_splitter.addWidget(horz_splitter0)
+    horz_splitter1 = QSplitter(Qt.Horizontal)
+    horz_splitter1.addWidget(self.vtk_widgets[2])
+    if use3D:
+      horz_splitter1.addWidget(self.vtk_widgets[3])
+    vert_splitter.addWidget(horz_splitter1)
+    horz_layout0.addWidget(vert_splitter)
+    horz_layout0.setContentsMargins(0,0,0,0)
+    self.vtk_panel.setLayout(horz_layout0)
 
-    # Set layout of frame
-    self.vtk_panel.setLayout(self.horz_layout0)
+  def establishCallbacks(self):
+    # Establish callbacks - show I inherit from something
+    for i in range(1):
+      # TODO: Figure out to call member function - do I need to inherit vtkInteractor?
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, callback) # ignored
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, callback)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, callback)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, callback)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, callback)
 
+      # Make all views and planes share the same color map
+      self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      if use3D:
+        self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+        self.planeWidget[i].SetColorMap(
+          self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
+
+      # Buffers are updated when resizing. Otherwise uninitialized
+      # memory is shown.
+      self.vtk_widgets[i].viewer.GetInteractor().Enable()
+    
   def initialize(self):
     print("initialize")
-    # Attach to Qt's event loop instead. Otherwise, fix shutdown
+    # For a large application, attach to Qt's event loop instead.
     self.vtk_widgets[0].start()
     self.vtk_widgets[1].start()
     self.vtk_widgets[2].start()
+    if use3D:
+      # 3D viewer
+      self.vtk_widgets[3].Initialize()
+      self.vtk_widgets[3].Start()
 
   def closeEvent(self, event):
-    """Stops the renderer such that the application can close without issues"""
+    """
+    Stops the renderer such that the application can close without issues
+    """
+    print("closing")
     for i in range(3):
       self.vtk_widgets[i].interactor.close()
-      #ren = self.vtk_widgets[0].viewer.GetRenderWindow()
-      #iren = ren.GetInteractor()
-      #ren.Finalize()
-      #iren.TerminateApp()
+    if use3D:
+      self.vtk_widgets[3].close()
+    event.accept()
     
 class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
@@ -248,10 +295,10 @@ class Viewer2D(QFrame):
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
 
-  def SetResliceCursor(self, cursor):
-    self.viewer.SetResliceCursor(cursor)
-  def GetResliceCursor(self):
-    return self.viewer.GetResliceCursor()
+#  def SetResliceCursor(self, cursor):
+#    self.viewer.SetResliceCursor(cursor)
+#  def GetResliceCursor(self):
+#    return self.viewer.GetResliceCursor()
   def start(self):
     # Start interactor(s). Figure out to attach to Qt event-loop
     #pass
