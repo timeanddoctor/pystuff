@@ -5,20 +5,13 @@ import sys
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
-from PyQt5 import QtCore
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
+from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
 
 ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
-
-use3D = True
-
-def callback(obj, ev):
-  print(ev)
-  print(ob)
 
 class OrientationObserver(object):
   def __init__(self, widgets):
@@ -63,25 +56,24 @@ class FourPaneViewer(QMainWindow, ui):
     # Disable renderers and widgets
     for i in range(3):
       self.vtk_widgets[i].viewer.GetInteractor().EnableRenderOff()
-    if use3D:
-      self.vtk_widgets[3].EnableRenderOff()
-      # Turn-off plane widgets
-      for i in range(3):
-        self.planeWidget[i].Off()
+
+    self.vtk_widgets[3].EnableRenderOff()
+    # Turn-off plane widgets
+    for i in range(3):
+      self.planeWidget[i].Off()
 
     # Assign data to 2D viewers sharing one cursorobject
     for i in range(3):
       self.vtk_widgets[i].viewer.SetInputData(reader.GetOutput())
 
-    if use3D:
-      # Enable plane widgets
-      for i in range(3):
-        self.planeWidget[i].SetInputConnection(reader.GetOutputPort())
-        self.planeWidget[i].SetPlaneOrientation(i)
-        self.planeWidget[i].SetSliceIndex(imageDims[i] // 2)
-        self.planeWidget[i].GetInteractor().Enable()
-        self.planeWidget[i].On()
-        self.planeWidget[i].InteractionOn()
+    # Enable plane widgets
+    for i in range(3):
+      self.planeWidget[i].SetInputConnection(reader.GetOutputPort())
+      self.planeWidget[i].SetPlaneOrientation(i)
+      self.planeWidget[i].SetSliceIndex(imageDims[i] // 2)
+      self.planeWidget[i].GetInteractor().Enable()
+      self.planeWidget[i].On()
+      self.planeWidget[i].InteractionOn()
 
     # Enable 2D viewers
     for i in range(3):
@@ -92,11 +84,10 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       self.vtk_widgets[i].interactor.Enable()
 
-    if use3D:
-      # Enable 3D rendering
-      self.vtk_widgets[3].EnableRenderOn()
-      # Reset camera for the renderer - otherwise it is set using dummy data
-      self.planeWidget[0].GetDefaultRenderer().ResetCamera()
+    # Enable 3D rendering
+    self.vtk_widgets[3].EnableRenderOn()
+    # Reset camera for the renderer - otherwise it is set using dummy data
+    self.planeWidget[0].GetDefaultRenderer().ResetCamera()
 
     # Update 3D
     self.ResetViews()
@@ -107,13 +98,12 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.Reset()
 
     # Also sync the Image plane widget on the 3D view
-    if use3D:
-      for i in range(3):
-        ps = self.planeWidget[i].GetPolyDataAlgorithm()
-        ps.SetNormal(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetNormal())
-        ps.SetCenter(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetOrigin())
-        # If the reslice plane has modified, update it on the 3D widget
-        self.planeWidget[i].UpdatePlacement()
+    for i in range(3):
+      ps = self.planeWidget[i].GetPolyDataAlgorithm()
+      ps.SetNormal(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetNormal())
+      ps.SetCenter(self.vtk_widgets[0].viewer.GetResliceCursor().GetPlane(i).GetOrigin())
+      # If the reslice plane has modified, update it on the 3D widget
+      self.planeWidget[i].UpdatePlacement()
 
     # Render once
     self.Render()
@@ -121,9 +111,8 @@ class FourPaneViewer(QMainWindow, ui):
   def Render(self):
     for i in range(3):
       self.vtk_widgets[i].viewer.Render()
-    if use3D:
-      # Render 3D
-      self.vtk_widgets[3].GetRenderWindow().Render()
+    # Render 3D
+    self.vtk_widgets[3].GetRenderWindow().Render()
 
   def SetResliceMode(self, mode):
     # Do we need to render planes if mode == 1?
@@ -158,32 +147,32 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       self.vtk_widgets[i].viewer.SetResliceCursor(self.vtk_widgets[0].viewer.GetResliceCursor())
 
-    if use3D:
-      # Make 3D viewer
-      picker = vtk.vtkCellPicker()
-      picker.SetTolerance(0.005)
+    # Make 3D viewer
+    picker = vtk.vtkCellPicker()
+    picker.SetTolerance(0.005)
 
-      ipwProp = vtk.vtkProperty()
-      ren = vtk.vtkRenderer()
-      interactor = QVTKRenderWindowInteractor()
-      interactor.GetRenderWindow().AddRenderer(ren)
-      self.vtk_widgets.append(interactor)
+    ipwProp = vtk.vtkProperty()
+    ren = vtk.vtkRenderer()
+    interactor = QVTKRenderWindowInteractor()
+    interactor.GetRenderWindow().AddRenderer(ren)
+    self.vtk_widgets.append(interactor)
 
-      self.planeWidget = []
-      for i in range(3):
-        pw = vtk.vtkImagePlaneWidget()
-        pw.SetInteractor(interactor)
-        pw.SetPicker(picker)
-        pw.RestrictPlaneToVolumeOn()
-        color = [0.0, 0.0, 0.0]
-        color[i] = 1
-        pw.GetPlaneProperty().SetColor(color)
-        pw.SetTexturePlaneProperty(ipwProp)
-        pw.TextureInterpolateOn()
-        pw.SetResliceInterpolateToLinear()
-        pw.DisplayTextOn()
-        pw.SetDefaultRenderer(ren)
-        self.planeWidget.append(pw)
+    self.planeWidget = []
+    for i in range(3):
+      pw = vtk.vtkImagePlaneWidget()
+      pw.SetInteractor(interactor)
+      pw.SetPicker(picker)
+      pw.RestrictPlaneToVolumeOn()
+      color = [0.0, 0.0, 0.0]
+      color[i] = 1
+      pw.GetPlaneProperty().SetColor(color)
+      pw.SetTexturePlaneProperty(ipwProp)
+      pw.TextureInterpolateOn()
+      pw.SetResliceInterpolateToLinear()
+      pw.DisplayTextOn()
+      pw.SetDefaultRenderer(ren)
+      self.planeWidget.append(pw)
+
     for i in range(3):
       color = [0.0, 0.0, 0.0]
       color[i] = 1
@@ -207,8 +196,7 @@ class FourPaneViewer(QMainWindow, ui):
     vert_splitter.addWidget(horz_splitter0)
     horz_splitter1 = QSplitter(Qt.Horizontal)
     horz_splitter1.addWidget(self.vtk_widgets[2])
-    if use3D:
-      horz_splitter1.addWidget(self.vtk_widgets[3])
+    horz_splitter1.addWidget(self.vtk_widgets[3])
     vert_splitter.addWidget(horz_splitter1)
     horz_layout0.addWidget(vert_splitter)
     horz_layout0.setContentsMargins(0, 0, 0, 0)
@@ -219,10 +207,9 @@ class FourPaneViewer(QMainWindow, ui):
     self.vtk_widgets[0].start()
     self.vtk_widgets[1].start()
     self.vtk_widgets[2].start()
-    if use3D:
-      # 3D viewer
-      self.vtk_widgets[3].Initialize()
-      self.vtk_widgets[3].Start()
+    # 3D viewer
+    self.vtk_widgets[3].Initialize()
+    self.vtk_widgets[3].Start()
 
   def closeEvent(self, event):
     """
@@ -231,8 +218,7 @@ class FourPaneViewer(QMainWindow, ui):
     print("closing")
     for i in range(3):
       self.vtk_widgets[i].interactor.close()
-    if use3D:
-      self.vtk_widgets[3].close()
+    self.vtk_widgets[3].close()
     event.accept()
 
 class Viewer2D(QFrame):
