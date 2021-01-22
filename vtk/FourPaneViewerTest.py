@@ -5,10 +5,9 @@ import sys
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
-from PyQt5 import QtCore
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
+from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
 
 ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 

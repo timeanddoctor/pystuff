@@ -13,13 +13,6 @@ ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
-class OrientationObserver(object):
-  def __init__(self, widgets):
-    self.widgets = widgets
-
-  def __call__(self, caller, ev):
-    print(ev)
-
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
