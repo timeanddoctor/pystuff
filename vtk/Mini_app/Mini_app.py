@@ -29,9 +29,15 @@ class ViewersApp(QMainWindow, ui):
     self.Resolution.valueChanged.connect(self.vtk_widget.set_Resolution)
     self.radioButton.clicked.connect(self.vtk_widget.button_event)
 
+    quitAct = QtWidgets.QAction("Quit", self)
+    quitAct.triggered.connect(self.closeEvent)
+    
   def initialize(self):
     self.vtk_widget.start()
 
+  def closeEvent(self, event):
+    self.vtk_widget.interactor.close()
+    
 class QMeshViewer(QtWidgets.QFrame):
   def __init__(self, parent):
     super(QMeshViewer,self).__init__(parent)
@@ -104,7 +110,6 @@ class QMeshViewer(QtWidgets.QFrame):
     self.sphere.SetPhiResolution(new_value)
     self.sphere.SetThetaResolution(new_value)
     self.render_window.Render()
-
 if __name__ == '__main__':
   app = QtWidgets.QApplication(["Mini-App"])
   main_window = ViewersApp()
