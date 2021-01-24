@@ -1,4 +1,7 @@
 #!/bin/env python3
+
+# TODO: Fix window level when set in 3D - verify if it is working for the c++ FourPaneViewer
+
 import os
 import sys
 
@@ -15,23 +18,98 @@ ui, QMainWindow = loadUiType(ui_file)
 
 use3D = True
 
+# Overload AddObserver
+
 def callback(obj, ev):
   print(ev)
-  print(ob)
+  #print(obj)
 
-class OrientationObserver(object):
-  def __init__(self, widgets):
-    self.widgets = widgets
+@vtk.calldata_type(vtk.VTK_INT)
+def callbackInt(obj, ev, *calldata):
+  print(ev)
+  print(calldata)
 
+# Works
+class ResliceCallback(object):
+  def __init__(self):
+    self.IPW = None
+    self.RCW = None
+    
+  def onResliceAxesChanged(self, caller, ev, *calldata):
+    # Does this every happen - never here
+    # TODO: instead of QVTKRenderWindowInteractor add a generic
+    # openglrenderwindow.
+    if (caller.GetClassName() == 'vtkImagePlaneWidget'):
+      print(calldata)
+      wl = calldata
+      if (caller == self.IPW[0]):
+        self.IPW[1].SetWindowLevel(wl[0],wl[1],1)
+        self.IPW[2].SetWindowLevel(wl[0],wl[1],1)
+      elif caller == self.IPW[1]:
+        self.IPW[0].SetWindowLevel(wl[0],wl[1],1)
+        self.IPW[2].SetWindowLevel(wl[0],wl[1],1)
+      elif caller == self.IPW[2]:
+        self.IPW[0].SetWindowLevel(wl[0],wl[1],1)
+        self.IPW[1].SetWindowLevel(wl[0],wl[1],1)
+    
+    if (caller.GetClassName() == 'vtkResliceCursorWidget'):
+      rep = caller.GetRepresentation()
+      rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
+
+      # Update 3D widget
+      for i in range(3):
+        ps = self.IPW[i].GetPolyDataAlgorithm()
+        origin = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
+        ps.SetOrigin(origin)
+        ps.SetPoint1(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint1())
+        ps.SetPoint2(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint2())
+        # If the reslice plane has modified, update it on the 3D widget
+        self.IPW[i].UpdatePlacement()
+
+    # Render everything
+    for i in range(3):
+      self.RCW[i].Render()
+
+    self.IPW[0].GetInteractor().GetRenderWindow().Render()
+    return
+  def onWindowLevelChanged(self, caller, ev):
+    for i in range(3):
+      self.RCW[i].Render()
+    self.IPW[0].GetInteractor().GetRenderWindow().Render()
+
+  # TODO: Call this everytime except for window level
+  def onImagePlaneWidget(self, caller, ev, *calldata):
+    if (caller.GetClassName() == 'vtkImagePlaneWidget'):
+      # How to get calldata
+      print(calldata)
+      wl = calldata
+      if (caller == self.IPW[0]):
+        self.IPW[1].SetWindowLevel(wl[0],wl[1],1)
+        self.IPW[2].SetWindowLevel(wl[0],wl[1],1)
+      elif caller == self.IPW[1]:
+        self.IPW[0].SetWindowLevel(wl[0],wl[1],1)
+        self.IPW[2].SetWindowLevel(wl[0],wl[1],1)
+      elif caller == self.IPW[2]:
+        self.IPW[0].SetWindowLevel(wl[0],wl[1],1)
+        self.IPW[1].SetWindowLevel(wl[0],wl[1],1)
+    print('vtkImagePlaneWidget')
+
+# Works
+class CustomCallback(object):
+  def __init__(self, ev=vtk.vtkCommand.NoEvent):
+    self.ev = ev
   def __call__(self, caller, ev):
-    print(ev)
-
+    print(self.ev)
+    
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
-    self.setup()
+    self.cb = None
+    self.vtk_widgets = None
     self.DEFAULT_DIR_KEY = "FourPaneViewer.py"
 
+    self.setup()
+    
   def onLoadClicked(self):
     mySettings = QSettings()
     fileDir = mySettings.value(self.DEFAULT_DIR_KEY)
@@ -75,9 +153,13 @@ class FourPaneViewer(QMainWindow, ui):
     if use3D:
       # Enable plane widgets
       for i in range(3):
+        # Something missing when compared to c++ (no interactor is set)
+        self.planeWidget[i].SetInteractor(self.vtk_widgets[3]) # was missing
+        
         self.planeWidget[i].SetInputConnection(reader.GetOutputPort())
         self.planeWidget[i].SetPlaneOrientation(i)
         self.planeWidget[i].SetSliceIndex(imageDims[i] // 2)
+        self.planeWidget[i].UpdatePlacement() # was missing
         self.planeWidget[i].GetInteractor().Enable()
         self.planeWidget[i].On()
         self.planeWidget[i].InteractionOn()
@@ -96,6 +178,8 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[3].EnableRenderOn()
       # Reset camera for the renderer - otherwise it is set using dummy data
       self.planeWidget[0].GetDefaultRenderer().ResetCamera()
+
+      # Could we requist interactor for 3D image??
 
     # Update 3D
     self.ResetViews()
@@ -164,6 +248,8 @@ class FourPaneViewer(QMainWindow, ui):
 
       ipwProp = vtk.vtkProperty()
       ren = vtk.vtkRenderer()
+      # In c++ we create generic opengl renderwindow and replace that of
+      # the window - can we do that and not use QVTKRenderWindowInteractor
       interactor = QVTKRenderWindowInteractor()
       interactor.GetRenderWindow().AddRenderer(ren)
       self.vtk_widgets.append(interactor)
@@ -191,6 +277,8 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
       self.vtk_widgets[i].interactor.Disable()
 
+    self.establishCallbacks()
+      
     for i in range(3):
       self.vtk_widgets[i].show()
 
@@ -213,6 +301,26 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout0.setContentsMargins(0, 0, 0, 0)
     self.vtk_panel.setLayout(horz_layout0)
 
+  def establishCallbacks(self):
+    self.cb = ResliceCallback()
+    self.cb.IPW = []
+    self.cb.RCW = []
+    for i in range(3):
+      self.cb.IPW.append(self.planeWidget[i])
+      self.cb.RCW.append(self.vtk_widgets[i].viewer.GetResliceCursorWidget())
+
+    for i in range(3):
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, self.cb.onResliceAxesChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      
+      # Make them all share the same color map.
+      self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
+      
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
     self.vtk_widgets[0].start()
@@ -272,6 +380,10 @@ if __name__ == '__main__':
     app = QApplication(["FourPaneViewer"])
   else:
     app = QCoreApplication.instance()
+  app.setApplicationName("FourPaneViewer")
+  app.setOrganizationName("KitWare")
+  app.setOrganizationDomain("www.kitware.com")
+  
   main_window = FourPaneViewer()
   main_window.show()
   main_window.initialize()

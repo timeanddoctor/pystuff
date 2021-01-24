@@ -2,6 +2,9 @@
 import os
 import sys
 
+# TODO: Figure out how to handle windowlevel events on the image planes - if possible
+#       Consider wrapping 3D stuff into a class
+
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
@@ -12,6 +15,36 @@ from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QAppli
 ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
+
+class ResliceCallback(object):
+  def __init__(self):
+    self.IPW = None
+    self.RCW = None
+    
+  def onResliceAxesChanged(self, caller, ev):
+    if (caller.GetClassName() == 'vtkResliceCursorWidget'):
+      rep = caller.GetRepresentation()
+      rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
+      # Update 3D widget
+      for i in range(3):
+        ps = self.IPW[i].GetPolyDataAlgorithm()
+        origin = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
+        ps.SetOrigin(origin)
+        ps.SetPoint1(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint1())
+        ps.SetPoint2(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint2())
+        # If the reslice plane has modified, update it on the 3D widget
+        self.IPW[i].UpdatePlacement()
+    self.render()
+
+  def onWindowLevelChanged(self, caller, ev):
+    self.render()
+
+  def render(self):
+    # Render views
+    for i in range(3):
+      self.RCW[i].Render()
+    # Render 3D
+    self.IPW[0].GetInteractor().GetRenderWindow().Render()
 
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
@@ -49,8 +82,8 @@ class FourPaneViewer(QMainWindow, ui):
     # Disable renderers and widgets
     for i in range(3):
       self.vtk_widgets[i].viewer.GetInteractor().EnableRenderOff()
-
     self.vtk_widgets[3].EnableRenderOff()
+
     # Turn-off plane widgets
     for i in range(3):
       self.planeWidget[i].Off()
@@ -150,6 +183,7 @@ class FourPaneViewer(QMainWindow, ui):
     interactor.GetRenderWindow().AddRenderer(ren)
     self.vtk_widgets.append(interactor)
 
+    # Create plane widgets
     self.planeWidget = []
     for i in range(3):
       pw = vtk.vtkImagePlaneWidget()
@@ -164,20 +198,19 @@ class FourPaneViewer(QMainWindow, ui):
       pw.SetResliceInterpolateToLinear()
       pw.DisplayTextOn()
       pw.SetDefaultRenderer(ren)
-      self.planeWidget.append(pw)
-
-    for i in range(3):
-      color = [0.0, 0.0, 0.0]
-      color[i] = 1
+      # Set background for 2D views
       for j in range(3):
         color[j] = color[j] / 4.0
       self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
       self.vtk_widgets[i].interactor.Disable()
 
+      self.planeWidget.append(pw)
+
+    self.establishCallbacks()
+
+    # Show widgets but hide non-existing data
     for i in range(3):
       self.vtk_widgets[i].show()
-
-    for i in range(3):
       self.vtk_widgets[i].viewer.GetImageActor().SetVisibility(False)
 
     # Layouts
@@ -195,6 +228,26 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout0.setContentsMargins(0, 0, 0, 0)
     self.vtk_panel.setLayout(horz_layout0)
 
+  def establishCallbacks(self):
+    self.cb = ResliceCallback()
+    self.cb.IPW = []
+    self.cb.RCW = []
+    for i in range(3):
+      self.cb.IPW.append(self.planeWidget[i])
+      self.cb.RCW.append(self.vtk_widgets[i].viewer.GetResliceCursorWidget())
+
+    for i in range(3):
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, self.cb.onResliceAxesChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      
+      # Make them all share the same color map.
+      self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
+
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
     self.vtk_widgets[0].start()
@@ -205,10 +258,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.vtk_widgets[3].Start()
 
   def closeEvent(self, event):
-    """
-    Stops the renderer such that the application can close without issues
-    """
-    print("closing")
+    # Stops the renderer such that the application can close without issues
     for i in range(3):
       self.vtk_widgets[i].interactor.close()
     self.vtk_widgets[3].close()
@@ -228,7 +278,6 @@ class Viewer2D(QFrame):
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
 
     # Disable interactor until data are present
-    # TODO: Do this after setting the interactor
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
     # Setup cursors and orientation of reslice image widget
@@ -252,6 +301,9 @@ if __name__ == '__main__':
     app = QApplication(["FourPaneViewer"])
   else:
     app = QCoreApplication.instance()
+  app.setApplicationName("FourPaneViewer")
+  app.setOrganizationName("KitWare")
+  app.setOrganizationDomain("www.kitware.com")    
   main_window = FourPaneViewer()
   main_window.show()
   main_window.initialize()
