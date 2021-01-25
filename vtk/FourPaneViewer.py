@@ -331,7 +331,7 @@ class Viewer2D(QFrame):
 
 if __name__ == '__main__':
   if QApplication.startingUp():
-    app = QApplication(["FourPaneViewer"])
+    app = QApplication(sys.argv)
   else:
     app = QCoreApplication.instance()
   app.setApplicationName("FourPaneViewer")
