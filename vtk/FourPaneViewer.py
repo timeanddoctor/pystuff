@@ -173,6 +173,15 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       self.vtk_widgets[i].viewer.SetResliceCursor(self.vtk_widgets[0].viewer.GetResliceCursor())
 
+    # Cursor representation (anti-alias)
+    for i in range(3):
+      for j in range(3):
+        prop = self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
+        prop.SetEdgeVisibility(1);
+        prop.SetPointSize(4);
+        prop.SetLineWidth(3);
+        prop.SetRenderLinesAsTubes(1)
+      
     # Make 3D viewer
     picker = vtk.vtkCellPicker()
     picker.SetTolerance(0.005)
@@ -198,6 +207,29 @@ class FourPaneViewer(QMainWindow, ui):
       pw.SetResliceInterpolateToLinear()
       pw.DisplayTextOn()
       pw.SetDefaultRenderer(ren)
+
+      prop = pw.GetPlaneProperty()
+      prop.SetEdgeVisibility(1);
+      prop.SetPointSize(4);
+      prop.SetLineWidth(3);
+      prop.SetRenderLinesAsTubes(1)
+      pw.SetPlaneProperty(prop)
+
+      prop = pw.GetSelectedPlaneProperty()
+      prop.SetEdgeVisibility(1);
+      prop.SetPointSize(4);
+      prop.SetLineWidth(3);
+      prop.SetRenderLinesAsTubes(1)
+      pw.SetSelectedPlaneProperty(prop)
+      
+      prop = pw.GetCursorProperty()
+      prop.SetEdgeVisibility(1);
+      prop.SetPointSize(4);
+      prop.SetLineWidth(3);
+      prop.SetRenderLinesAsTubes(1)
+      pw.SetCursorProperty(prop)
+
+      pw.Modified()
       # Set background for 2D views
       for j in range(3):
         color[j] = color[j] / 4.0
@@ -245,6 +277,7 @@ class FourPaneViewer(QMainWindow, ui):
       
       # Make them all share the same color map.
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      # Only needed when we fix WindowLevelEvents on plane widgets
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
 
