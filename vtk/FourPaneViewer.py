@@ -20,11 +20,21 @@ def renderLinesAsTubes(prop):
   prop.SetRenderLinesAsTubes(1)
   return prop
 
+class callback(object):
+  def __call__(self, o, e, d = None):
+    print(o.GetWindow())
+    print(o.GetLevel())
+    return
+    
 class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
     self.RCW = None
-    
+
+  @vtk.calldata_type(vtk.VTK_FLOAT)
+  def onTest(self, caller, ev, myInt):
+    print(myInt)
+    return
   def onResliceAxesChanged(self, caller, ev):
     if (caller.GetClassName() == 'vtkResliceCursorWidget'):
       rep = caller.GetRepresentation()
@@ -41,6 +51,11 @@ class ResliceCallback(object):
     self.render()
 
   def onWindowLevelChanged(self, caller, ev):
+    if (caller.GetClassName() == 'vtkImagePlaneWidget'):
+      wl = [caller.GetWindow(), caller.GetLevel()]
+      # They share colormap
+      main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
+      main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
     self.render()
 
   def render(self):
@@ -160,7 +175,7 @@ class FourPaneViewer(QMainWindow, ui):
     loadAct.triggered.connect(self.onLoadClicked)
 
     exitAct = QAction('&Exit', self)
-    exitAct.setShortcut('Ctrl+Q')
+    exitAct.setShortcut('ALT+F4')
     exitAct.setStatusTip('Exit application')
     exitAct.triggered.connect(self.close)
 
@@ -190,9 +205,14 @@ class FourPaneViewer(QMainWindow, ui):
     ipwProp = vtk.vtkProperty()
     ren = vtk.vtkRenderer()
     interactor = QVTKRenderWindowInteractor()
+
     interactor.GetRenderWindow().AddRenderer(ren)
     self.vtk_widgets.append(interactor)
 
+    # TEST - cannot be image. Figure out to get windowlevel from plane
+    #interactorStyle = vtk.vtkInteractorStyleImage()
+    #interactor.SetInteractorStyle(interactorStyle)
+    
     # Create plane widgets
     self.planeWidget = []
     for i in range(3):
@@ -266,11 +286,16 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+
+      # TEST. TODO: Use decorator with argument to fetch window and level
+      self.planeWidget[i].AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       
       # Make them all share the same color map.
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+
       # Only needed when we fix WindowLevelEvents on plane widgets
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
+      self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput())
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
 
   def initialize(self):
