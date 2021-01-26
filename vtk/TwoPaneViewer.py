@@ -2,12 +2,14 @@
 import os
 import sys
 
+# TODO: Make a VTK button in the corner of each 2DViewer
+
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo
-from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
+from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame, QStackedWidget, QPushButton
 
 ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
@@ -25,7 +27,7 @@ class callback(object):
     print(o.GetWindow())
     print(o.GetLevel())
     return
-
+    
 class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
@@ -69,12 +71,18 @@ class ResliceCallback(object):
       self.RCW[i].Render()
     # Render 3D
     self.IPW[0].GetInteractor().GetRenderWindow().Render()
-
+    
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
     self.setup()
     self.DEFAULT_DIR_KEY = "FourPaneViewer.py"
+
+  def onPlaneClicked(self):
+    index = self.stack.currentIndex()
+    index = index + 1
+    index = index % 3
+    self.stack.setCurrentIndex(index)
 
   def onLoadClicked(self):
     mySettings = QSettings()
@@ -131,7 +139,7 @@ class FourPaneViewer(QMainWindow, ui):
 
       cornerAnnotation.SetWindowLevel(self.vtk_widgets[0].viewer.GetWindowLevel())
       self.vtk_widgets[i].viewer.GetRenderer().AddViewProp(cornerAnnotation) # Issue
-
+      
     # Enable plane widgets
     for i in range(3):
       self.planeWidget[i].SetInputConnection(reader.GetOutputPort())
@@ -219,7 +227,7 @@ class FourPaneViewer(QMainWindow, ui):
       for j in range(3):
         prop = self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
         renderLinesAsTubes(prop)
-
+      
     # Make 3D viewer
     picker = vtk.vtkCellPicker()
     picker.SetTolerance(0.005)
@@ -254,7 +262,7 @@ class FourPaneViewer(QMainWindow, ui):
       prop = pw.GetSelectedPlaneProperty()
       renderLinesAsTubes(prop)
       pw.SetSelectedPlaneProperty(prop)
-
+      
       prop = pw.GetCursorProperty()
       renderLinesAsTubes(prop)
       pw.SetCursorProperty(prop)
@@ -276,19 +284,24 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetImageActor().SetVisibility(False)
 
     # Layouts
-    horz_layout0 = QHBoxLayout()
-    vert_splitter = QSplitter(Qt.Vertical)
+    self.stack = QStackedWidget(self)
+    self.stack.addWidget(self.vtk_widgets[0])
+    self.stack.addWidget(self.vtk_widgets[1])
+    self.stack.addWidget(self.vtk_widgets[2])
+
+    vert_layout0 = QVBoxLayout()
     horz_splitter0 = QSplitter(Qt.Horizontal)
-    horz_splitter0.addWidget(self.vtk_widgets[0])
-    horz_splitter0.addWidget(self.vtk_widgets[1])
-    vert_splitter.addWidget(horz_splitter0)
-    horz_splitter1 = QSplitter(Qt.Horizontal)
-    horz_splitter1.addWidget(self.vtk_widgets[2])
-    horz_splitter1.addWidget(self.vtk_widgets[3])
-    vert_splitter.addWidget(horz_splitter1)
-    horz_layout0.addWidget(vert_splitter)
-    horz_layout0.setContentsMargins(0, 0, 0, 0)
-    self.vtk_panel.setLayout(horz_layout0)
+    horz_splitter0.addWidget(self.stack)
+    horz_splitter0.addWidget(self.vtk_widgets[3])
+    vert_layout0.addWidget(horz_splitter0)
+    vert_layout0.setContentsMargins(0, 0, 0, 0)
+    self.vtk_panel.setLayout(vert_layout0)
+
+    layout = QVBoxLayout()
+    self.btn = QPushButton("Next")
+    layout.addWidget(self.btn)
+    self.frame.setLayout(layout)
+    self.btn.clicked.connect(self.onPlaneClicked)
 
   def establishCallbacks(self):
     self.cb = ResliceCallback()
@@ -355,7 +368,7 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
-
+    
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
   def GetResliceCursor(self):
@@ -371,7 +384,7 @@ if __name__ == '__main__':
     app = QCoreApplication.instance()
   app.setApplicationName("FourPaneViewer")
   app.setOrganizationName("KitWare")
-  app.setOrganizationDomain("www.kitware.com")
+  app.setOrganizationDomain("www.kitware.com")    
   main_window = FourPaneViewer()
   main_window.show()
   main_window.initialize()
