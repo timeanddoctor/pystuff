@@ -8,7 +8,7 @@ Description:
 This file demonstrate how to interact in vtk
 
 This file will employ 2 method (actually 2 similar
-mthod to achieve the goal):
+method to achieve the goal):
     pass
 1. Re-load vtkInteractorStyleImage, add observer
  to this class.

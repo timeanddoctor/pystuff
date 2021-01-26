@@ -111,6 +111,27 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       self.vtk_widgets[i].viewer.SetInputData(reader.GetOutput())
 
+    # Corner annotation
+    for i in range(3):
+      # TODO: Use (<slice>, <slice_pos>, <window_level>)
+      cornerAnnotation = vtk.vtkCornerAnnotation()
+      cornerAnnotation.SetLinearFontScaleFactor( 2 )
+      cornerAnnotation.SetNonlinearFontScaleFactor( 1 )
+      cornerAnnotation.SetMaximumFontSize( 20 )
+      cornerAnnotation.SetText( vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
+                                                                    0:'Sagittal',
+                                                                    1:'Coronal'}[i])
+      cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
+      cornerAnnotation.SetImageActor(self.vtk_widgets[i].viewer.GetImageActor())
+
+      # TODO: This does not trigger when map is changed
+      #imageWL =vtk.vtkImageMapToWindowLevelColors()
+      #imageWL.SetInputConnection(self.planeWidget[i].GetColorMap().GetOutputPort())
+      #cornerAnnotation.SetWindowLevel(imageWL)
+
+      cornerAnnotation.Modified()
+      self.vtk_widgets[i].viewer.GetRenderer().AddViewProp(cornerAnnotation) # Issue
+      
     # Enable plane widgets
     for i in range(3):
       self.planeWidget[i].SetInputConnection(reader.GetOutputPort())
@@ -327,15 +348,6 @@ class Viewer2D(QFrame):
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
 
-    # Corner annotation
-    cornerAnnotation = vtk.vtkCornerAnnotation()
-    cornerAnnotation.SetLinearFontScaleFactor( 2 )
-    cornerAnnotation.SetNonlinearFontScaleFactor( 1 )
-    cornerAnnotation.SetMaximumFontSize( 20 )
-    cornerAnnotation.SetText( 2, {2:'Axial', 0:'Sagittal', 1:'Coronal'}[iDim])
-    cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
-    #self.viewer.GetRenderer().AddViewProp( cornerAnnotation ) # Issue
-    
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
