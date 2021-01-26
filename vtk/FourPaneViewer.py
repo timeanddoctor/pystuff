@@ -13,6 +13,13 @@ ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
+def renderLinesAsTubes(prop):
+  prop.SetEdgeVisibility(1);
+  prop.SetPointSize(4);
+  prop.SetLineWidth(3);
+  prop.SetRenderLinesAsTubes(1)
+  return prop
+
 class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
@@ -174,10 +181,7 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       for j in range(3):
         prop = self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
-        prop.SetEdgeVisibility(1);
-        prop.SetPointSize(4);
-        prop.SetLineWidth(3);
-        prop.SetRenderLinesAsTubes(1)
+        renderLinesAsTubes(prop)
       
     # Make 3D viewer
     picker = vtk.vtkCellPicker()
@@ -206,24 +210,15 @@ class FourPaneViewer(QMainWindow, ui):
       pw.SetDefaultRenderer(ren)
 
       prop = pw.GetPlaneProperty()
-      prop.SetEdgeVisibility(1);
-      prop.SetPointSize(4);
-      prop.SetLineWidth(3);
-      prop.SetRenderLinesAsTubes(1)
+      renderLinesAsTubes(prop)
       pw.SetPlaneProperty(prop)
 
       prop = pw.GetSelectedPlaneProperty()
-      prop.SetEdgeVisibility(1);
-      prop.SetPointSize(4);
-      prop.SetLineWidth(3);
-      prop.SetRenderLinesAsTubes(1)
+      renderLinesAsTubes(prop)
       pw.SetSelectedPlaneProperty(prop)
       
       prop = pw.GetCursorProperty()
-      prop.SetEdgeVisibility(1);
-      prop.SetPointSize(4);
-      prop.SetLineWidth(3);
-      prop.SetRenderLinesAsTubes(1)
+      renderLinesAsTubes(prop)
       pw.SetCursorProperty(prop)
 
       pw.Modified()
