@@ -327,6 +327,15 @@ class Viewer2D(QFrame):
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
 
+    # Corner annotation
+    cornerAnnotation = vtk.vtkCornerAnnotation()
+    cornerAnnotation.SetLinearFontScaleFactor( 2 )
+    cornerAnnotation.SetNonlinearFontScaleFactor( 1 )
+    cornerAnnotation.SetMaximumFontSize( 20 )
+    cornerAnnotation.SetText( 2, {2:'Axial', 0:'Sagittal', 1:'Coronal'}[iDim])
+    cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
+    self.viewer.GetRenderer().AddViewProp( cornerAnnotation )
+    
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
@@ -337,6 +346,7 @@ class Viewer2D(QFrame):
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
 
+    
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
   def GetResliceCursor(self):
