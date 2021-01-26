@@ -2,9 +2,6 @@
 import os
 import sys
 
-# TODO: Figure out how to handle windowlevel events on the image planes - if possible
-#       Consider wrapping 3D stuff into a class
-
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
