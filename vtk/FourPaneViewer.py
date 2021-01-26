@@ -49,11 +49,17 @@ class ResliceCallback(object):
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
     self.render()
+  def onEndWindowLevelChanged(self, caller, ev):
+    print('end')
+    wl = [main_window.vtk_widgets[0].viewer.GetColorWindow(), main_window.vtk_widgets[0].viewer.GetColorLevel()]
+    main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
+    main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
+    return
 
   def onWindowLevelChanged(self, caller, ev):
     if (caller.GetClassName() == 'vtkImagePlaneWidget'):
       wl = [caller.GetWindow(), caller.GetLevel()]
-      # They share colormap
+      # Triggers an update of vtkImageMapToWindowLevelColors - updates annotations
       main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
       main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
     self.render()
@@ -64,7 +70,7 @@ class ResliceCallback(object):
       self.RCW[i].Render()
     # Render 3D
     self.IPW[0].GetInteractor().GetRenderWindow().Render()
-
+    
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
@@ -113,7 +119,7 @@ class FourPaneViewer(QMainWindow, ui):
 
     # Corner annotation
     for i in range(3):
-      # TODO: Use (<slice>, <slice_pos>, <window_level>)
+      # TODO: Use (<slice>, <slice_pos>, <window_level>). WindowLevel not signaled when changed in RIW's
       cornerAnnotation = vtk.vtkCornerAnnotation()
       cornerAnnotation.SetLinearFontScaleFactor( 2 )
       cornerAnnotation.SetNonlinearFontScaleFactor( 1 )
@@ -124,12 +130,7 @@ class FourPaneViewer(QMainWindow, ui):
       cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
       cornerAnnotation.SetImageActor(self.vtk_widgets[i].viewer.GetImageActor())
 
-      # TODO: This does not trigger when map is changed
-      #imageWL =vtk.vtkImageMapToWindowLevelColors()
-      #imageWL.SetInputConnection(self.planeWidget[i].GetColorMap().GetOutputPort())
-      #cornerAnnotation.SetWindowLevel(imageWL)
-
-      cornerAnnotation.Modified()
+      cornerAnnotation.SetWindowLevel(self.vtk_widgets[0].viewer.GetWindowLevel())
       self.vtk_widgets[i].viewer.GetRenderer().AddViewProp(cornerAnnotation) # Issue
       
     # Enable plane widgets
@@ -149,6 +150,7 @@ class FourPaneViewer(QMainWindow, ui):
     # Enable interactors
     for i in range(3):
       self.vtk_widgets[i].interactor.Enable()
+      self.vtk_widgets[i].viewer.GetInteractor().Enable()
 
     # Enable 3D rendering
     self.vtk_widgets[3].EnableRenderOn()
@@ -306,15 +308,14 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
-      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged) # ignored after data
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged) # ignored after data 
 
-      # TEST. TODO: Use decorator with argument to fetch window and level
       self.planeWidget[i].AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
-      
+
       # Make them all share the same color map.
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
 
-      # Only needed when we fix WindowLevelEvents on plane widgets
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
       #self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput())
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
@@ -339,6 +340,10 @@ class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
+    # style is vtkInteractorStyleSwitch
+    # experiment
+    interactor.SetInteractorStyle(vtk.vtkInteractorStyleImage())
+
     self.layout = QHBoxLayout(self)
     self.layout.addWidget(interactor)
     self.layout.setContentsMargins(0, 0, 0, 0)
@@ -347,10 +352,9 @@ class Viewer2D(QFrame):
     self.viewer = vtk.vtkResliceImageViewer()
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
-
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
-
+    #print(self.viewer.GetRenderWindow().GetInteractor().GetInteractorStyle())
     # Setup cursors and orientation of reslice image widget
     rep = self.viewer.GetResliceCursorWidget().GetRepresentation()
     rep.GetResliceCursorActor().GetCursorAlgorithm().SetReslicePlaneNormal(iDim)
