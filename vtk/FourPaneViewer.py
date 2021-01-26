@@ -295,7 +295,7 @@ class FourPaneViewer(QMainWindow, ui):
 
       # Only needed when we fix WindowLevelEvents on plane widgets
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
-      self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput())
+      #self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput())
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
 
   def initialize(self):
@@ -334,7 +334,7 @@ class Viewer2D(QFrame):
     cornerAnnotation.SetMaximumFontSize( 20 )
     cornerAnnotation.SetText( 2, {2:'Axial', 0:'Sagittal', 1:'Coronal'}[iDim])
     cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
-    self.viewer.GetRenderer().AddViewProp( cornerAnnotation )
+    #self.viewer.GetRenderer().AddViewProp( cornerAnnotation ) # Issue
     
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
