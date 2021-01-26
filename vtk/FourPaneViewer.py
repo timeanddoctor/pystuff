@@ -50,7 +50,6 @@ class ResliceCallback(object):
         self.IPW[i].UpdatePlacement()
     self.render()
   def onEndWindowLevelChanged(self, caller, ev):
-    print('end')
     wl = [main_window.vtk_widgets[0].viewer.GetColorWindow(), main_window.vtk_widgets[0].viewer.GetColorLevel()]
     main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
     main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
@@ -232,10 +231,6 @@ class FourPaneViewer(QMainWindow, ui):
     interactor.GetRenderWindow().AddRenderer(ren)
     self.vtk_widgets.append(interactor)
 
-    # TEST - cannot be image. Figure out to get windowlevel from plane
-    #interactorStyle = vtk.vtkInteractorStyleImage()
-    #interactor.SetInteractorStyle(interactorStyle)
-    
     # Create plane widgets
     self.planeWidget = []
     for i in range(3):
@@ -308,8 +303,9 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
-      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged) # ignored after data
-      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged) # ignored after data 
+      # Ignored after loading data!!! (why)
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
 
       self.planeWidget[i].AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
 
@@ -317,7 +313,7 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
 
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
-      #self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput())
+      #self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput()) # deep copy (not needed)
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
 
   def initialize(self):
@@ -340,9 +336,8 @@ class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
-    # style is vtkInteractorStyleSwitch
-    # experiment
-    interactor.SetInteractorStyle(vtk.vtkInteractorStyleImage())
+    # Change style to image
+    #interactor.SetInteractorStyle(vtk.vtkInteractorStyleImage())
 
     self.layout = QHBoxLayout(self)
     self.layout.addWidget(interactor)
@@ -354,21 +349,18 @@ class Viewer2D(QFrame):
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
-    #print(self.viewer.GetRenderWindow().GetInteractor().GetInteractorStyle())
     # Setup cursors and orientation of reslice image widget
     rep = self.viewer.GetResliceCursorWidget().GetRepresentation()
     rep.GetResliceCursorActor().GetCursorAlgorithm().SetReslicePlaneNormal(iDim)
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
-
     
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
   def start(self):
-    # Start interactor(s).
     self.interactor.Initialize()
     self.interactor.Start()
 
