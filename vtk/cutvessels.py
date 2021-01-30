@@ -3,16 +3,19 @@
 # In this example vtkClipPolyData is used to cut a polygonal model
 # of a cow in half. In addition, the open clip is closed by triangulating
 # the resulting complex polygons.
-
+import os
 import vtk
-from vtk.util.colors import peacock, tomato, red
+from vtk.util.colors import peacock, tomato, red, black
 #VTK_DATA_ROOT = vtkGetDataRoot()
 VTK_DATA_ROOT = '/home/jmh/git/VTKExamples/src/Testing'
 
 # First start by reading a cow model. We also generate surface normals for
 # prettier rendering.
 cow = vtk.vtkBYUReader()
-cow.SetGeometryFileName(VTK_DATA_ROOT + "/Data/cow.g")
+if os.name == 'nt':
+  cow.SetGeometryFileName("./cow.g")
+else:
+  cow.SetGeometryFileName(VTK_DATA_ROOT + "/Data/cow.g")
 cowNormals = vtk.vtkPolyDataNormals()
 cowNormals.SetInputConnection(cow.GetOutputPort())
 
@@ -55,7 +58,8 @@ clipActor.SetBackfaceProperty(backProp)
 cutEdges = vtk.vtkCutter()
 cutEdges.SetInputConnection(cowNormals.GetOutputPort())
 cutEdges.SetCutFunction(plane)
-cutEdges.GenerateCutScalarsOn()
+#cutEdges.GenerateCutScalarsOn()
+cutEdges.GenerateCutScalarsOff()
 cutEdges.SetValue(0, 0.5)
 cutStrips = vtk.vtkStripper()
 cutStrips.SetInputConnection(cutEdges.GetOutputPort())
@@ -101,8 +105,10 @@ if testMe:
   edgeMapper.SetInputData(tubes.GetOutput())
 else:
   # edgeMapper.SetInputData(cutPoly) # alone gives surface
-  edgeMapper.SetInputConnection(tubes.GetOutputPort()) # Ignores InputData
-
+  #edgeMapper.SetInputConnection(tubes.GetOutputPort()) # Ignores InputData
+  edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
+  edgeMapper.ScalarVisibilityOff() # See if we can get rid of it
+  
 edgeActor = vtk.vtkActor()
 edgeActor.SetMapper(edgeMapper)
 edgeActor.GetProperty().SetColor(red)
@@ -126,10 +132,10 @@ iren.SetRenderWindow(renWin)
 
 
 # Add the actors to the renderer, set the background and size
-ren.AddActor(clipActor)
-ren.AddActor(cutActor)
-ren.AddActor(restActor)
-ren.AddActor(edgeActor)
+#ren.AddActor(clipActor)
+#ren.AddActor(cutActor)
+#ren.AddActor(restActor)
+ren.AddActor(edgeActor) # What we want
 
 ren.SetBackground(1, 1, 1)
 ren.ResetCamera()

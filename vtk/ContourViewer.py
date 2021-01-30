@@ -6,12 +6,22 @@ import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from PyQt5.uic import loadUiType
-from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo
+from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
 from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
+
+import numpy as np
 
 ui_file = os.path.join(os.path.dirname(__file__), 'ContourViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
+
+def hexCol(s):
+  if isinstance(s,str):
+    if "#" in s:  # hex to rgb
+      h = s.lstrip("#")
+      rgb255 = list(int(h[i : i + 2], 16) for i in (0, 2, 4))
+      rgbh = np.array(rgb255) / 255.0
+      return tuple(rgbh)
 
 def renderLinesAsTubes(prop):
   prop.SetEdgeVisibility(1)
@@ -30,7 +40,7 @@ class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
     self.RCW = None
-
+    self.Contours = None
   @vtk.calldata_type(vtk.VTK_FLOAT)
   def onTest(self, caller, ev, myInt):
     print(myInt)
@@ -48,6 +58,7 @@ class ResliceCallback(object):
         ps.SetPoint2(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
+      # Update contours
     self.render()
   def onEndWindowLevelChanged(self, caller, ev):
     wl = [main_window.vtk_widgets[0].viewer.GetColorWindow(), main_window.vtk_widgets[0].viewer.GetColorLevel()]
@@ -76,7 +87,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.setup()
     self.DEFAULT_DIR_KEY = "ContourViewer.py"
 
-  def onLoadClicked(self):
+  def onLoadClicked(self, fileType):
     mySettings = QSettings()
     fileDir = mySettings.value(self.DEFAULT_DIR_KEY)
     options = QFileDialog.Options()
@@ -86,16 +97,54 @@ class FourPaneViewer(QMainWindow, ui):
     fileName, _ = \
       fileDialog.getOpenFileName(self,
                                  "QFileDialog.getOpenFileName()",
-                                 "", "All Files (*);;MHD Files (*.mhd)",
+                                 "", "All Files (*);;MHD Files (*.mhd);; VTP Files (*.vtp)",
                                  options=options)
     if fileName:
       # Update default dir
       currentDir = QFileInfo(fileName).absoluteDir()
       mySettings.setValue(self.DEFAULT_DIR_KEY,
                           currentDir.absolutePath())
-      # Load data
-      self.loadFile(fileName)
+      info = QFileInfo(fileName)
+      if (info.completeSuffix() == "vtp") and fileType == 1:
+        self.loadSurface(fileName)
+      elif (info.completeSuffix() == "mhd") and fileType == 0:
+        # Load data
+        self.loadFile(fileName)
+  def loadSurface(self, fileName):
+    print("loading surface")
 
+    reader = vtk.vtkXMLPolyDataReader()
+    reader.SetFileName(fileName)
+    reader.Update()
+
+    # Take the largest connected component
+    connectFilter = vtk.vtkPolyDataConnectivityFilter()
+    connectFilter.SetInputConnection(reader.GetOutputPort())
+    connectFilter.SetExtractionModeToLargestRegion()
+    connectFilter.Update();
+
+    self.vesselPolyData = connectFilter.GetOutput()
+
+    # Compute normals
+    self.vesselNormals = vtk.vtkPolyDataNormals()
+    self.vesselNormals.SetInputData(self.vesselPolyData)
+
+    # Mapper
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(self.vesselNormals.GetOutputPort())
+
+    # Actor for vessels
+    self.vessels = vtk.vtkActor()
+    self.vessels.SetMapper(mapper)
+    prop = self.vessels.GetProperty()
+    prop.SetColor(vtk.vtkColor3d(hexCol("#517487"))) # 25% lighter
+
+    # Assign actor to the renderer
+    prop.SetOpacity(0.35)
+    self.planeWidget[0].GetDefaultRenderer().AddActor(self.vessels)
+
+    self.Render()
+    
   def loadFile(self, fileName):
     # Load VTK Meta Image
     reader = vtk.vtkMetaImageReader()
@@ -194,8 +243,13 @@ class FourPaneViewer(QMainWindow, ui):
     loadAct = QAction('&Open', self)
     loadAct.setShortcut('Ctrl+O')
     loadAct.setStatusTip('Load data')
-    loadAct.triggered.connect(self.onLoadClicked)
+    loadAct.triggered.connect(lambda: self.onLoadClicked(0))
 
+    surfAct = QAction('&Open Surface', self)
+    surfAct.setShortcut('Ctrl+S')
+    surfAct.setStatusTip('Surf data')
+    surfAct.triggered.connect(lambda: self.onLoadClicked(1))
+    
     exitAct = QAction('&Exit', self)
     exitAct.setShortcut('ALT+F4')
     exitAct.setStatusTip('Exit application')
@@ -204,6 +258,7 @@ class FourPaneViewer(QMainWindow, ui):
     menubar = self.menuBar()
     fileMenu = menubar.addMenu('&File')
     fileMenu.addAction(loadAct)
+    fileMenu.addAction(surfAct)
     fileMenu.addAction(exitAct)
 
     self.vtk_widgets = [Viewer2D(self.vtk_panel, 0),
@@ -373,6 +428,7 @@ if __name__ == '__main__':
   app.setOrganizationName("KitWare")
   app.setOrganizationDomain("www.kitware.com")
   main_window = FourPaneViewer()
+  main_window.setGeometry(0,40,main_window.width(), main_window.height())
   main_window.show()
   main_window.initialize()
   sys.exit(app.exec_())
