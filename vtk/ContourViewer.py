@@ -28,6 +28,7 @@ def renderLinesAsTubes(prop):
   prop.SetRenderLinesAsTubes(1)
   return prop
 
+# TODO: Call render on EndInteraction
 class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
@@ -160,9 +161,9 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       # TODO: Use (<slice>, <slice_pos>, <window_level>). WindowLevel not signaled when changed in RIW's
       cornerAnnotation = vtk.vtkCornerAnnotation()
-      cornerAnnotation.SetLinearFontScaleFactor( 2 )
-      cornerAnnotation.SetNonlinearFontScaleFactor( 1 )
-      cornerAnnotation.SetMaximumFontSize( 20 )
+      cornerAnnotation.SetLinearFontScaleFactor(2)
+      cornerAnnotation.SetNonlinearFontScaleFactor(1)
+      cornerAnnotation.SetMaximumFontSize(20)
       cornerAnnotation.SetText( vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
                                                                     0:'Sagittal',
                                                                     1:'Coronal'}[i])
@@ -188,7 +189,7 @@ class FourPaneViewer(QMainWindow, ui):
 
     # Enable interactors
     for i in range(3):
-      self.vtk_widgets[i].interactor.Enable()
+      #self.vtk_widgets[i].interactor.Enable()
       self.vtk_widgets[i].viewer.GetInteractor().Enable()
 
     # Enable 3D rendering
@@ -311,9 +312,18 @@ class FourPaneViewer(QMainWindow, ui):
         color[j] = color[j] / 4.0
       self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
       self.vtk_widgets[i].interactor.Disable()
-
       self.planeWidget.append(pw)
 
+    # Annotation
+    cornerAnnotation = vtk.vtkCornerAnnotation()
+    cornerAnnotation.SetLinearFontScaleFactor(2)
+    cornerAnnotation.SetNonlinearFontScaleFactor(1)
+    cornerAnnotation.SetMaximumFontSize(20)
+    cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft, '3D')
+    cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
+    cornerAnnotation.SetWindowLevel(self.vtk_widgets[0].viewer.GetWindowLevel())
+    ren.AddViewProp(cornerAnnotation)
+    
     self.establishCallbacks()
 
     # Show widgets but hide non-existing data
@@ -378,6 +388,7 @@ class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
+    self.edgeActor = None
     # Change style to image
     #interactor.SetInteractorStyle(vtk.vtkInteractorStyleImage())
 
@@ -440,16 +451,16 @@ class Viewer2D(QFrame):
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
   def UpdateContour(self):
-    RCW = self.viewer.GetResliceCursorWidget()    
-    ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
-    self.plane.SetOrigin(ps.GetOrigin())
-    normal = ps.GetNormal()
-    self.plane.SetNormal(normal)
-
-    # Move in front of image
-    transform = vtk.vtkTransform()
-    transform.Translate(normal)
-    self.edgeActor.SetUserTransform(transform)
+    if self.edgeActor is not None:
+      RCW = self.viewer.GetResliceCursorWidget()    
+      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+      self.plane.SetOrigin(ps.GetOrigin())
+      normal = ps.GetNormal()
+      self.plane.SetNormal(normal)
+      # Move in front of image (z-buffer)
+      transform = vtk.vtkTransform()
+      transform.Translate(normal)
+      self.edgeActor.SetUserTransform(transform)
     
   def start(self):
     self.interactor.Initialize()
