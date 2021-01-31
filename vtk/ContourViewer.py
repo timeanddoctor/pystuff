@@ -4,12 +4,11 @@ import sys
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
 from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
-
-import numpy as np
 
 ui_file = os.path.join(os.path.dirname(__file__), 'ContourViewer.ui')
 
@@ -17,11 +16,10 @@ ui, QMainWindow = loadUiType(ui_file)
 
 def hexCol(s):
   if isinstance(s,str):
-    if "#" in s:  # hex to rgb
-      h = s.lstrip("#")
-      rgb255 = list(int(h[i : i + 2], 16) for i in (0, 2, 4))
-      rgbh = np.array(rgb255) / 255.0
-      return tuple(rgbh)
+    if "#" in s:
+      s = s.lstrip("#")
+    return tuple(int(s[i : i + 2], 16)/255.0 for i in (0, 2, 4))
+  return None
 
 def renderLinesAsTubes(prop):
   prop.SetEdgeVisibility(1)
@@ -41,6 +39,7 @@ class ResliceCallback(object):
     self.IPW = None
     self.RCW = None
     self.Contours = None
+    self.first = True
   @vtk.calldata_type(vtk.VTK_FLOAT)
   def onTest(self, caller, ev, myInt):
     print(myInt)
@@ -51,6 +50,7 @@ class ResliceCallback(object):
       rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
       # Update 3D widget
       for i in range(3):
+        # Only needed for the actual plane (TODO: Optimize)
         ps = self.IPW[i].GetPolyDataAlgorithm()
         origin = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
         ps.SetOrigin(origin)
@@ -58,7 +58,46 @@ class ResliceCallback(object):
         ps.SetPoint2(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
-      # Update contours
+
+        if self.first:
+          # Update contours (HACK)
+          plane = vtk.vtkPlane()
+          plane.SetOrigin(origin)
+          normal = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetNormal()
+          plane.SetNormal(normal)
+
+          # Generate line segments
+          cutEdges = vtk.vtkCutter()
+          cutEdges.SetInputConnection(main_window.vesselNormals.GetOutputPort())
+          cutEdges.SetCutFunction(plane)
+          cutEdges.GenerateCutScalarsOff()
+          cutEdges.SetValue(0, 0.5)
+          
+          # Put together into polylines
+          cutStrips = vtk.vtkStripper()
+          cutStrips.SetInputConnection(cutEdges.GetOutputPort())
+          cutStrips.Update()
+
+          edgeMapper = vtk.vtkPolyDataMapper()
+          edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
+          
+          edgeActor = vtk.vtkActor()
+          edgeActor.SetMapper(edgeMapper)
+          prop = edgeActor.GetProperty()
+          prop.SetColor(yellow) # If Scalars are extracted - they turn green
+          prop.SetLineWidth(3)
+          prop.SetPointSize(4)
+          prop.SetRenderLinesAsTubes(1)
+          prop.SetEdgeVisibility(1)
+
+          # Move in front of image
+          transform = vtk.vtkTransform()
+          transform.Translate(normal)
+          edgeActor.SetUserTransform(transform)
+
+          # Add actor to renderer
+          main_window.vtk_widgets[i].viewer.GetRenderer().AddViewProp(edgeActor)
+    self.first = False
     self.render()
   def onEndWindowLevelChanged(self, caller, ev):
     wl = [main_window.vtk_widgets[0].viewer.GetColorWindow(), main_window.vtk_widgets[0].viewer.GetColorLevel()]
@@ -368,14 +407,12 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
 
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
-      #self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput()) # deep copy (not needed)
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
 
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
-    self.vtk_widgets[0].start()
-    self.vtk_widgets[1].start()
-    self.vtk_widgets[2].start()
+    for i in range(3):
+      self.vtk_widgets[i].start()
     # 3D viewer
     self.vtk_widgets[3].Initialize()
     self.vtk_widgets[3].Start()
@@ -415,6 +452,8 @@ class Viewer2D(QFrame):
     self.viewer.SetResliceCursor(cursor)
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
+  def updateContour(self):
+    print('TODO')
   def start(self):
     self.interactor.Initialize()
     self.interactor.Start()
