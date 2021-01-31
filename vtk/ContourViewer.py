@@ -28,22 +28,12 @@ def renderLinesAsTubes(prop):
   prop.SetRenderLinesAsTubes(1)
   return prop
 
-class callback(object):
-  def __call__(self, o, e, d = None):
-    print(o.GetWindow())
-    print(o.GetLevel())
-    return
-
 class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
     self.RCW = None
     self.Contours = None
-    self.first = True
-  @vtk.calldata_type(vtk.VTK_FLOAT)
-  def onTest(self, caller, ev, myInt):
-    print(myInt)
-    return
+    self.first = False
   def onResliceAxesChanged(self, caller, ev):
     if (caller.GetClassName() == 'vtkResliceCursorWidget'):
       rep = caller.GetRepresentation()
@@ -51,53 +41,15 @@ class ResliceCallback(object):
       # Update 3D widget
       for i in range(3):
         # Only needed for the actual plane (TODO: Optimize)
-        ps = self.IPW[i].GetPolyDataAlgorithm()
-        origin = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
-        ps.SetOrigin(origin)
-        ps.SetPoint1(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint1())
-        ps.SetPoint2(self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetPoint2())
+        pda = self.IPW[i].GetPolyDataAlgorithm()
+        ps = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource()
+        origin = ps.GetOrigin()
+        pda.SetOrigin(origin)
+        pda.SetPoint1(ps.GetPoint1())
+        pda.SetPoint2(ps.GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
-
-        if self.first:
-          # Update contours (HACK)
-          plane = vtk.vtkPlane()
-          plane.SetOrigin(origin)
-          normal = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource().GetNormal()
-          plane.SetNormal(normal)
-
-          # Generate line segments
-          cutEdges = vtk.vtkCutter()
-          cutEdges.SetInputConnection(main_window.vesselNormals.GetOutputPort())
-          cutEdges.SetCutFunction(plane)
-          cutEdges.GenerateCutScalarsOff()
-          cutEdges.SetValue(0, 0.5)
-          
-          # Put together into polylines
-          cutStrips = vtk.vtkStripper()
-          cutStrips.SetInputConnection(cutEdges.GetOutputPort())
-          cutStrips.Update()
-
-          edgeMapper = vtk.vtkPolyDataMapper()
-          edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
-          
-          edgeActor = vtk.vtkActor()
-          edgeActor.SetMapper(edgeMapper)
-          prop = edgeActor.GetProperty()
-          prop.SetColor(yellow) # If Scalars are extracted - they turn green
-          prop.SetLineWidth(3)
-          prop.SetPointSize(4)
-          prop.SetRenderLinesAsTubes(1)
-          prop.SetEdgeVisibility(1)
-
-          # Move in front of image
-          transform = vtk.vtkTransform()
-          transform.Translate(normal)
-          edgeActor.SetUserTransform(transform)
-
-          # Add actor to renderer
-          main_window.vtk_widgets[i].viewer.GetRenderer().AddViewProp(edgeActor)
-    self.first = False
+        main_window.vtk_widgets[i].UpdateContour()
     self.render()
   def onEndWindowLevelChanged(self, caller, ev):
     wl = [main_window.vtk_widgets[0].viewer.GetColorWindow(), main_window.vtk_widgets[0].viewer.GetColorLevel()]
@@ -150,8 +102,6 @@ class FourPaneViewer(QMainWindow, ui):
         # Load data
         self.loadFile(fileName)
   def loadSurface(self, fileName):
-    print("loading surface")
-
     reader = vtk.vtkXMLPolyDataReader()
     reader.SetFileName(fileName)
     reader.Update()
@@ -182,6 +132,8 @@ class FourPaneViewer(QMainWindow, ui):
     prop.SetOpacity(0.35)
     self.planeWidget[0].GetDefaultRenderer().AddActor(self.vessels)
 
+    for i in range(3):
+      self.vtk_widgets[i].InitializeContour(self.vesselNormals)
     self.Render()
     
   def loadFile(self, fileName):
@@ -397,15 +349,13 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
-      # Ignored after loading data!!! (why)
+      # Ignored after loading data (why)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
-
       self.planeWidget[i].AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
 
       # Make them all share the same color map.
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
-
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
 
@@ -447,13 +397,60 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
+  def InitializeContour(self, data):
+    # Update contours
+    self.plane = vtk.vtkPlane()
+    RCW = self.viewer.GetResliceCursorWidget()    
+    ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+    self.plane.SetOrigin(ps.GetOrigin())
+    normal = ps.GetNormal()
+    self.plane.SetNormal(normal)
+
+    # Generate line segments
+    cutEdges = vtk.vtkCutter()
+    cutEdges.SetInputConnection(main_window.vesselNormals.GetOutputPort())
+    cutEdges.SetCutFunction(self.plane)
+    cutEdges.GenerateCutScalarsOff()
+    cutEdges.SetValue(0, 0.5)
+          
+    # Put together into polylines
+    cutStrips = vtk.vtkStripper()
+    cutStrips.SetInputConnection(cutEdges.GetOutputPort())
+    cutStrips.Update()
+
+    edgeMapper = vtk.vtkPolyDataMapper()
+    edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
+          
+    self.edgeActor = vtk.vtkActor()
+    self.edgeActor.SetMapper(edgeMapper)
+    prop = self.edgeActor.GetProperty()
+    renderLinesAsTubes(prop)
+    prop.SetColor(yellow) # If Scalars are extracted - they turn green
+
+    # Move in front of image
+    transform = vtk.vtkTransform()
+    transform.Translate(normal)
+    self.edgeActor.SetUserTransform(transform)
+
+    # Add actor to renderer
+    self.viewer.GetRenderer().AddViewProp(self.edgeActor)
 
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
-  def updateContour(self):
-    print('TODO')
+  def UpdateContour(self):
+    RCW = self.viewer.GetResliceCursorWidget()    
+    ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+    self.plane.SetOrigin(ps.GetOrigin())
+    normal = ps.GetNormal()
+    self.plane.SetNormal(normal)
+
+    # Move in front of image
+    transform = vtk.vtkTransform()
+    transform.Translate(normal)
+    self.edgeActor.SetUserTransform(transform)
+    
   def start(self):
     self.interactor.Initialize()
     self.interactor.Start()
