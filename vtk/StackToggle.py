@@ -2,22 +2,27 @@ import sys
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QPalette
+
 class View2DStacked(QStackedWidget):
   def __init__(self, parent=None):
     super(View2DStacked, self).__init__(parent)
     for i in range(3):
       widget = QWidget(self)
       widget.setGeometry(0,0,400,300)
-      if 0:
-        pal = QPalette()
-        pal.setColor(QPalette.Background, {0:Qt.red, 1:Qt.green, 2:Qt.blue}[i])
-        widget.setAutoFillBackground(True)
-        widget.setPalette(pal)
-      else:
-        widget.setStyleSheet("background-color:" + {0:"red;", 1:"green;",
-                                                    2:"blue;"}[i])
+      tColor0 = {0:"red", 1:"green", 2:"blue"}[i]
+      tColor1 = {0:"red", 1:"green", 2:"blue"}[(i+1) % 3]
+      widget.setStyleSheet("background-color:" + tColor0 + ";")
+      pb = QPushButton(tColor1)
+      pb.clicked.connect(self.buttonClicked)
+      hbox = QHBoxLayout(widget)
+      hbox.addWidget(pb)
       self.addWidget(widget)
-
+  def buttonClicked(self):
+    index = self.currentIndex()
+    index = index + 1
+    index = index % 3
+    self.setCurrentIndex(index)
+    
 if __name__ == "__main__":
   app = QApplication([])
   w = QWidget()
