@@ -1,0 +1,5 @@
+ draw 2d wireframe overlays of 3d geometry in my own program on a slice viewer using vtkImageViewer2.
+
+I do this by using vtkCutter to cut the polygon. If I want to fill it I then use vtkContourTriangulator. Then simply give it to a vtkPolyDataMapper and then to a vtkActor as normal. Lastly add the vtkActor to the renderer of vtkImageViewer2.
+
+The only other trick here is that the polygon should be bumped slightly in front of the image slice plane so that the image doesn’t cover the polygon. I actually do this by just using a cutting plane slightly in front of the actual slice plane.
