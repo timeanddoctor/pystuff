@@ -7,8 +7,8 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
-from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
-from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
+from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect, QObject
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame, QSpacerItem, QSizePolicy, QPushButton
 
 ui_file = os.path.join(os.path.dirname(__file__), 'ContourViewer.ui')
 
@@ -275,6 +275,11 @@ class FourPaneViewer(QMainWindow, ui):
     ren = vtk.vtkRenderer()
     interactor = QVTKRenderWindowInteractor()
 
+    # Gradient background
+    ren.SetBackground(245.0/255.0,245.0/255.0,245.0/255.0)
+    ren.SetBackground2(170.0/255.0,170.0/255.0,170.0/255.0)
+    ren.GradientBackgroundOn()
+
     interactor.GetRenderWindow().AddRenderer(ren)
     self.vtk_widgets.append(interactor)
 
@@ -346,6 +351,46 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout0.setContentsMargins(0, 0, 0, 0)
     self.vtk_panel.setLayout(horz_layout0)
 
+    vert_layout = QVBoxLayout()
+    horz_layout1 = QHBoxLayout()
+    self.btnSagittal = QPushButton("S")
+    self.btnSagittal.setCheckable(True)
+    self.btnSagittal.setChecked(True)
+    horz_layout1.addWidget(self.btnSagittal)
+    self.btnCoronal = QPushButton("C")
+    self.btnCoronal.setCheckable(True)
+    self.btnCoronal.setChecked(True)
+    horz_layout1.addWidget(self.btnCoronal)
+    self.btnAxial = QPushButton("A")
+    self.btnAxial.setCheckable(True)
+    self.btnAxial.setChecked(True)
+
+    self.btnSagittal.clicked.connect(self.togglePlanes)
+    self.btnCoronal.clicked.connect(self.togglePlanes)
+    self.btnAxial.clicked.connect(self.togglePlanes)
+    
+    horz_layout1.addWidget(self.btnAxial)
+    verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+    vert_layout.addItem(verticalSpacer)
+    vert_layout.addItem(horz_layout1)
+    self.frame.setLayout(vert_layout)
+  def togglePlanes(self, state):
+    obj = self.sender()
+    index = -1
+    isChecked = state
+    if (obj == self.btnSagittal):
+      index = 0
+    elif obj == self.btnCoronal:
+      index = 1
+    elif obj == self.btnAxial:
+      index = 2
+      
+    if (index > -1):
+      if not isChecked:
+        self.planeWidget[index].Off()
+      else:
+        self.planeWidget[index].On()
+    return
   def establishCallbacks(self):
     self.cb = ResliceCallback()
     self.cb.IPW = []
