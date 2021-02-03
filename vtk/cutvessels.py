@@ -105,14 +105,19 @@ if testMe:
   edgeMapper.SetInputData(tubes.GetOutput())
 else:
   # edgeMapper.SetInputData(cutPoly) # alone gives surface
-  #edgeMapper.SetInputConnection(tubes.GetOutputPort()) # Ignores InputData
-  edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
-  edgeMapper.ScalarVisibilityOff() # See if we can get rid of it
+  edgeMapper.SetInputConnection(tubes.GetOutputPort()) # Ignores InputData
+  #edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
   
 edgeActor = vtk.vtkActor()
 edgeActor.SetMapper(edgeMapper)
 edgeActor.GetProperty().SetColor(red)
 edgeActor.GetProperty().SetLineWidth(3)
+
+transform = vtk.vtkTransform()
+transform.Translate(+0.1, +0.1, 0)
+edgeActor.SetUserTransform(transform)
+
+
 
 # The clipped part of the cow is rendered wireframe.
 restMapper = vtk.vtkPolyDataMapper()
@@ -132,9 +137,9 @@ iren.SetRenderWindow(renWin)
 
 
 # Add the actors to the renderer, set the background and size
-#ren.AddActor(clipActor)
-#ren.AddActor(cutActor)
-#ren.AddActor(restActor)
+ren.AddActor(clipActor)
+ren.AddActor(cutActor)
+ren.AddActor(restActor)
 ren.AddActor(edgeActor) # What we want
 
 ren.SetBackground(1, 1, 1)

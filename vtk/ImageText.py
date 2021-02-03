@@ -14,17 +14,23 @@ def main():
   textProperty = vtk.vtkTextProperty()
   textProperty.SetColor(1.0, 1.0, 0.0) # yellow
   textProperty.SetFontSize(24)
+  # alignment property
+  
   textImage = vtk.vtkImageData()
-  freeType.RenderString(textProperty, "Test String", 50, textImage)
-
+  dpi = 50
+  # add argument int[2]
+  a = [1,2]
+  freeType.RenderString(textProperty, "Test String", dpi, textImage, a)
+  print(a)
+  print(textImage.GetExtent())
   # Combine the images
   blend = vtk.vtkImageBlend()
   blend.AddInputConnection(drawing.GetOutputPort())
-  blend.AddInputData(textImage)
+  #blend.AddInputData(textImage)
+  blend.AddInputData(drawing.GetOutput())
   blend.SetOpacity(0, 0.5) # background image: 50% opaque
   blend.SetOpacity(1, 1.0) # text: 100% opaque
   blend.Update()
-
   writer = vtk.vtkPNGWriter()
   writer.SetFileName("output.png")
   writer.SetInputConnection(blend.GetOutputPort())
