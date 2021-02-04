@@ -1,6 +1,7 @@
 #!/bin/env python3
 import os
 import sys
+from collections import deque
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -161,7 +162,7 @@ class FourPaneViewer(QMainWindow, ui):
 
     # Corner annotation
     for i in range(3):
-      # TODO: Use (<slice>, <slice_pos>, <window_level>). WindowLevel not signaled when changed in RIW's
+      # It is possible to use <slice>, <slice_pos>, <window_level> in the label
       cornerAnnotation = vtk.vtkCornerAnnotation()
       cornerAnnotation.SetLinearFontScaleFactor(2)
       cornerAnnotation.SetNonlinearFontScaleFactor(1)
@@ -169,7 +170,11 @@ class FourPaneViewer(QMainWindow, ui):
       cornerAnnotation.SetText( vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
                                                                     0:'Sagittal',
                                                                     1:'Coronal'}[i])
-      cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
+      prop = cornerAnnotation.GetTextProperty()
+      prop.BoldOn()
+      color = deque((1,0,0))
+      color.rotate(i)
+      cornerAnnotation.GetTextProperty().SetColor(tuple(color))
       cornerAnnotation.SetImageActor(self.vtk_widgets[i].viewer.GetImageActor())
 
       cornerAnnotation.SetWindowLevel(self.vtk_widgets[0].viewer.GetWindowLevel())
@@ -406,7 +411,7 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
-      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver('EndInteractionEvent', self.cb.Render)
+      # self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver('EndInteractionEvent', self.cb.Render)
       # Ignored after loading data (why)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
@@ -437,8 +442,6 @@ class Viewer2D(QFrame):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
     self.edgeActor = None
-    # Change style to image
-    #interactor.SetInteractorStyle(vtk.vtkInteractorStyleImage())
 
     self.layout = QHBoxLayout(self)
     self.layout.addWidget(interactor)
@@ -507,7 +510,7 @@ class Viewer2D(QFrame):
       self.plane.SetNormal(normal)
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
-      transform.Translate(normal)
+      transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
       self.edgeActor.SetUserTransform(transform)
     
   def start(self):

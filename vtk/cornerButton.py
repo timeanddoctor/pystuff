@@ -36,6 +36,30 @@ def _the_callback(widget, event):
         try_callback(callback, value)
     return
 
+def resizeCallback(widget, event):
+  curSize = widget.GetSize()
+  if curSize != resizeCallback.lastValue:
+    print('modified')
+    resizeCallback.lastValue = curSize
+
+    upperRight = vtk.vtkCoordinate()
+    upperRight.SetCoordinateSystemToNormalizedDisplay()
+    upperRight.SetValue(1.0, 1.0)
+
+    renderer = viewer.GetRenderer()
+    bds = [0]*6
+    sz = 40.0
+    bds[0] = upperRight.GetComputedDisplayValue(renderer)[0] - sz
+    bds[1] = bds[0] + sz
+    bds[2] = upperRight.GetComputedDisplayValue(renderer)[1] - sz
+    bds[3] = bds[2] + sz
+    bds[4] = bds[5] = 0.0
+
+    # Scale to 1, default is .5
+    buttonRepresentation.SetPlaceFactor(1)
+    buttonRepresentation.PlaceWidget(bds)
+resizeCallback.lastValue = (0,0)
+
 def Create2DImage(dims, rgba):
   image = vtk.vtkImageData()
   image.SetDimensions(dims[0],dims[1],1)
@@ -118,8 +142,11 @@ bds[4] = bds[5] = 0.0
 # Scale to 1, default is .5
 buttonRepresentation.SetPlaceFactor(1)
 buttonRepresentation.PlaceWidget(bds)
+# consider (anchor, size), where anchor is lower-left in world coordinates
 buttonWidget.On()
 
+renWin = viewer.GetRenderWindow()
+renWin.AddObserver('ModifiedEvent', resizeCallback)
 
 interactor.Initialize()
 interactor.Start()
