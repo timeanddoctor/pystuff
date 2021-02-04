@@ -72,7 +72,9 @@ class ResliceCallback(object):
       self.RCW[i].Render()
     # Render 3D
     self.IPW[0].GetInteractor().GetRenderWindow().Render()
-
+  def Render(self, caller, ev):
+    # This may help on the missing render calls!!
+    self.render()
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
@@ -404,6 +406,7 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver('EndInteractionEvent', self.cb.Render)
       # Ignored after loading data (why)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
