@@ -2,6 +2,13 @@ import sys
 import vtk
 import numpy as np
 
+def renderLinesAsTubes(prop):
+  prop.SetEdgeVisibility(1)
+  prop.SetPointSize(4)
+  prop.SetLineWidth(3)
+  prop.SetRenderLinesAsTubes(1)
+  return prop
+
 def polyInfo(filter):
   """
   Debug information about output from vtkPolyData producing filters
