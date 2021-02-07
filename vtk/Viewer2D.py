@@ -10,15 +10,42 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from collections import deque
 
 from PyQt5.QtWidgets import QHBoxLayout, QFrame
+from PyQt5.QtCore import pyqtSignal
 
 from vtkUtils import renderLinesAsTubes
 
+class Viewer3D(QFrame):
+  def __init__(self, parent, iDim=0):
+    super(Viewer3D, self).__init__(parent)
+
+def try_callback(func, *args):
+    """Wrap a given callback in a try statement."""
+    import logging
+    try:
+        func(*args)
+    except Exception as e:
+        logging.warning('Encountered issue in callback: {}'.format(e))
+    return
+    
+def callback(val):
+    print("Button pressed!")
+
+
+def _the_callback(widget, event):
+    value = widget.GetRepresentation().GetState()
+    if hasattr(callback, '__call__'):
+        try_callback(callback, value)
+    return
+
+    
 class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
-    self.edgeActor = None
-    self.iDim = iDim
+    self.edgeActor = None # Actor for contours
+    self.iDim = iDim      # Slice dimensions
+    self.lastSize = (0,0) # Used for corner button
+    self.buttonWidget = None 
     self.layout = QHBoxLayout(self)
     self.layout.addWidget(interactor)
     self.layout.setContentsMargins(0, 0, 0, 0)
@@ -27,15 +54,65 @@ class Viewer2D(QFrame):
     self.viewer = vtk.vtkResliceImageViewer()
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
+
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
+
     # Setup cursors and orientation of reslice image widget
     rep = self.viewer.GetResliceCursorWidget().GetRepresentation()
     rep.GetResliceCursorActor().GetCursorAlgorithm().SetReslicePlaneNormal(iDim)
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
+
+  def resizeCallback(self, widget, event):
+    """
+    Callback for repositioning button. Only observe this if
+    a button is added
+    """
+    curSize = widget.GetSize()
+    if (curSize != self.lastSize):
+      self.lastSize = curSize
     
+      upperRight = vtk.vtkCoordinate()
+      upperRight.SetCoordinateSystemToNormalizedDisplay()
+      upperRight.SetValue(1.0, 1.0)
+
+      renderer = self.viewer.GetRenderer()
+      buttonRepresentation = self.buttonWidget.GetRepresentation()
+
+      bds = [0]*6
+      sz = 40.0
+      bds[0] = upperRight.GetComputedDisplayValue(renderer)[0] - sz
+      bds[1] = bds[0] + sz
+      bds[2] = upperRight.GetComputedDisplayValue(renderer)[1] - sz
+      bds[3] = bds[2] + sz
+      bds[4] = bds[5] = 0.0
+      
+      # Scale to 1, default is .5
+      buttonRepresentation.SetPlaceFactor(1)
+      buttonRepresentation.PlaceWidget(bds)
+    
+  def AddCornerButton(self, texture, cb = None):
+    """
+    Add corner button. TODO: Support callback argument
+    """
+
+    # Render to ensure viewport has the right size (it has not)
+    buttonRepresentation = vtk.vtkTexturedButtonRepresentation2D()
+    buttonRepresentation.SetNumberOfStates(1)
+    buttonRepresentation.SetButtonTexture(0, texture)
+    self.buttonWidget = vtk.vtkButtonWidget()
+    self.buttonWidget.SetInteractor(self.viewer.GetInteractor())
+    self.buttonWidget.SetRepresentation(buttonRepresentation)
+
+    #self.buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, _the_callback)
+    
+    self.buttonWidget.On()
+
+    renWin = self.viewer.GetRenderWindow()
+    renWin.AddObserver('ModifiedEvent', self.resizeCallback)
+
   def SetInputData(self, data):
     self.viewer.SetInputData(data)
     # Corner annotation, can use <slice>, <slice_pos>, <window_level>
@@ -118,16 +195,29 @@ class Viewer2D(QFrame):
 
 from PyQt5.QtWidgets import QStackedWidget
     
-def Viewer2DStacked(QStackedWidget):
+class Viewer2DStacked(QStackedWidget):
+  resliceAxesChanged = pyqtSignal()
   def __init__(self, parent=None):
-    super(View2DStacked, self).__init__(parent)
+    super(Viewer2DStacked, self).__init__(parent)
     # Create signal
     #planesModified = pyEvent()
-    
     for i in range(3):
       widget = Viewer2D(self, i)
       self.addWidget(widget)
 
+    # Add corner buttons
+    fileName = ['./S00.png', './C00.png', './A00.png']
+    for i in range(3):
+      reader = vtk.vtkPNGReader()
+      reader.SetFileName(fileName[(i + 1) % 3])
+      reader.Update()
+      texture = reader.GetOutput()
+      self.widget(i).AddCornerButton(texture)
+
+    # TODO: Add callback from 2D view to stack
+    for i in range(3):
+      self.widget(i).buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.btnClicked)
+    
     # Make all views share the same cursor object
     for i in range(3):
       self.widget(i).viewer.SetResliceCursor(self.widget(0).viewer.GetResliceCursor())
@@ -135,7 +225,7 @@ def Viewer2DStacked(QStackedWidget):
     # Cursor representation (anti-alias)
     for i in range(3):
       for j in range(3):
-        prop = self.widgets(i).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
+        prop = self.widget(i).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
         renderLinesAsTubes(prop)
     for i in range(3):
       color = [0.0, 0.0, 0.0]
@@ -145,9 +235,28 @@ def Viewer2DStacked(QStackedWidget):
       self.widget(i).viewer.GetRenderer().SetBackground(color)
       self.widget(i).interactor.Disable()
 
-    # Callbacks
-    
-    
+    # Make them all share the same color map.
+    for i in range(3):
+      self.widget(i).viewer.SetLookupTable(self.widget(0).viewer.GetLookupTable())
+      
+    # Establish callbacks
+  def btnClicked(self, widget, event):
+    index = self.currentIndex()
+    index = index + 1
+    index = index % 3
+    self.setCurrentIndex(index)
+  def Initialize(self):
+    for i in range(3):
+      self.widget(i).Start()
+
+  def EnableRenderOff(self):
+    for i in range(3):
+      self.widget(i).viewer.GetInteractor().EnableRenderOff()
+
+  def SetInputData(self, data):
+    for i in range(3):
+      self.widget(i).SetInputData(data)
+
 # Local variables: #
 # tab-width: 2 #
 # python-indent: 2 #
