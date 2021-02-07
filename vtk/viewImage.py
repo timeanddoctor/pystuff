@@ -3,7 +3,7 @@ import vtk
 
 # Read the source file.
 reader = vtk.vtkPNGReader()
-reader.SetFileName("oIu8j.png")
+reader.SetFileName("./test.png")
 reader.Update()
 
 # Display the image

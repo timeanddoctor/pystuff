@@ -1,0 +1,10 @@
+float getZoom( vtkRenderer *R, vtkImageData *I ) {
+int *dim = I->GetDimensions();
+vtkSmartPointer<vtkCoordinate> c = vtkCoordinate::New();
+c->SetValue( 0, 0, 0 );
+int *res = c->GetComputedDisplayValue( R );
+int a = res[0];
+c->SetValue(dim[0], 0, 0);
+res = c->GetComputedDisplayValue( R );
+return static_cast<float>(res[0]-a)/dim[0];
+}

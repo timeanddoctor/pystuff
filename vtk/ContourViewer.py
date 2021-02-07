@@ -1,14 +1,15 @@
 #!/bin/env python3
 import os
 import sys
+from collections import deque
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
-from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
-from PyQt5.QtWidgets import QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame
+from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect, QObject
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame, QSpacerItem, QSizePolicy, QPushButton
 
 ui_file = os.path.join(os.path.dirname(__file__), 'ContourViewer.ui')
 
@@ -72,7 +73,9 @@ class ResliceCallback(object):
       self.RCW[i].Render()
     # Render 3D
     self.IPW[0].GetInteractor().GetRenderWindow().Render()
-
+  def Render(self, caller, ev):
+    # This may help on the missing render calls!!
+    self.render()
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
@@ -155,23 +158,7 @@ class FourPaneViewer(QMainWindow, ui):
 
     # Assign data to 2D viewers sharing one cursorobject
     for i in range(3):
-      self.vtk_widgets[i].viewer.SetInputData(reader.GetOutput())
-
-    # Corner annotation
-    for i in range(3):
-      # TODO: Use (<slice>, <slice_pos>, <window_level>). WindowLevel not signaled when changed in RIW's
-      cornerAnnotation = vtk.vtkCornerAnnotation()
-      cornerAnnotation.SetLinearFontScaleFactor(2)
-      cornerAnnotation.SetNonlinearFontScaleFactor(1)
-      cornerAnnotation.SetMaximumFontSize(20)
-      cornerAnnotation.SetText( vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
-                                                                    0:'Sagittal',
-                                                                    1:'Coronal'}[i])
-      cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
-      cornerAnnotation.SetImageActor(self.vtk_widgets[i].viewer.GetImageActor())
-
-      cornerAnnotation.SetWindowLevel(self.vtk_widgets[0].viewer.GetWindowLevel())
-      self.vtk_widgets[i].viewer.GetRenderer().AddViewProp(cornerAnnotation) # Issue
+      self.vtk_widgets[i].SetInputData(reader.GetOutput())
 
     # Enable plane widgets
     for i in range(3):
@@ -275,6 +262,11 @@ class FourPaneViewer(QMainWindow, ui):
     ren = vtk.vtkRenderer()
     interactor = QVTKRenderWindowInteractor()
 
+    # Gradient background
+    ren.SetBackground(245.0/255.0,245.0/255.0,245.0/255.0)
+    ren.SetBackground2(170.0/255.0,170.0/255.0,170.0/255.0)
+    ren.GradientBackgroundOn()
+
     interactor.GetRenderWindow().AddRenderer(ren)
     self.vtk_widgets.append(interactor)
 
@@ -346,6 +338,46 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout0.setContentsMargins(0, 0, 0, 0)
     self.vtk_panel.setLayout(horz_layout0)
 
+    vert_layout = QVBoxLayout()
+    horz_layout1 = QHBoxLayout()
+    self.btnSagittal = QPushButton("S")
+    self.btnSagittal.setCheckable(True)
+    self.btnSagittal.setChecked(True)
+    horz_layout1.addWidget(self.btnSagittal)
+    self.btnCoronal = QPushButton("C")
+    self.btnCoronal.setCheckable(True)
+    self.btnCoronal.setChecked(True)
+    horz_layout1.addWidget(self.btnCoronal)
+    self.btnAxial = QPushButton("A")
+    self.btnAxial.setCheckable(True)
+    self.btnAxial.setChecked(True)
+
+    self.btnSagittal.clicked.connect(self.togglePlanes)
+    self.btnCoronal.clicked.connect(self.togglePlanes)
+    self.btnAxial.clicked.connect(self.togglePlanes)
+    
+    horz_layout1.addWidget(self.btnAxial)
+    verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+    vert_layout.addItem(verticalSpacer)
+    vert_layout.addItem(horz_layout1)
+    self.frame.setLayout(vert_layout)
+  def togglePlanes(self, state):
+    obj = self.sender()
+    index = -1
+    isChecked = state
+    if (obj == self.btnSagittal):
+      index = 0
+    elif obj == self.btnCoronal:
+      index = 1
+    elif obj == self.btnAxial:
+      index = 2
+      
+    if (index > -1):
+      if not isChecked:
+        self.planeWidget[index].Off()
+      else:
+        self.planeWidget[index].On()
+    return
   def establishCallbacks(self):
     self.cb = ResliceCallback()
     self.cb.IPW = []
@@ -359,6 +391,7 @@ class FourPaneViewer(QMainWindow, ui):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
+      # self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver('EndInteractionEvent', self.cb.Render)
       # Ignored after loading data (why)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
@@ -390,9 +423,7 @@ class Viewer2D(QFrame):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
     self.edgeActor = None
-    # Change style to image
-    #interactor.SetInteractorStyle(vtk.vtkInteractorStyleImage())
-
+    self.iDim = iDim
     self.layout = QHBoxLayout(self)
     self.layout.addWidget(interactor)
     self.layout.setContentsMargins(0, 0, 0, 0)
@@ -409,6 +440,25 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
+  def SetInputData(self, data):
+    self.viewer.SetInputData(data)
+    # Corner annotation, can use <slice>, <slice_pos>, <window_level>
+    cornerAnnotation = vtk.vtkCornerAnnotation()
+    cornerAnnotation.SetLinearFontScaleFactor(2)
+    cornerAnnotation.SetNonlinearFontScaleFactor(1)
+    cornerAnnotation.SetMaximumFontSize(20)
+    cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
+                                                                 0:'Sagittal',
+                                                                 1:'Coronal'}[self.iDim])
+    prop = cornerAnnotation.GetTextProperty()
+    prop.BoldOn()
+    color = deque((1,0,0))
+    color.rotate(self.iDim)
+    cornerAnnotation.GetTextProperty().SetColor(tuple(color))
+    cornerAnnotation.SetImageActor(self.viewer.GetImageActor())
+    
+    cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
+    self.viewer.GetRenderer().AddViewProp(cornerAnnotation)
   def InitializeContour(self, data):
     # Update contours
     self.plane = vtk.vtkPlane()
@@ -460,7 +510,7 @@ class Viewer2D(QFrame):
       self.plane.SetNormal(normal)
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
-      transform.Translate(normal)
+      transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
       self.edgeActor.SetUserTransform(transform)
     
   def start(self):
