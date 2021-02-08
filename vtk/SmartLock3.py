@@ -1,4 +1,11 @@
 #!/bin/env python3
+
+# TODO: Load CT
+#       Load Vessels
+#       Load Surface
+#       Stack of 2 widgets
+#       Ultrasound
+
 import os
 import sys
 
@@ -98,8 +105,6 @@ class SmartLock(QMainWindow, ui):
     for i in range(3):
       self.stackCT.widget(i).show()
       self.stackCT.widget(i).viewer.GetImageActor().SetVisibility(False)
-    
-    
     
   def closeEvent(self, event):
     # Stops the renderer such that the application can close without issues

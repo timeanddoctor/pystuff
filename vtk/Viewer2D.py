@@ -104,20 +104,22 @@ class Viewer3D(QFrame):
     renWin.AddObserver('ModifiedEvent', self.resizeCallback)
 
   def onTogglePlanesClicked(self, widget, event):
-    index = -1
-    isChecked = widget.GetRepresentation().GetState()
-    if (widget == self.buttonWidgets[0]):
-      index = 0
-    elif (widget == self.buttonWidgets[1]):
-      index = 1
-    elif (widget == self.buttonWidgets[2]):
-      index = 2
-    index = (index + 1) % 3
-    if (index > -1):
-      if isChecked:
-        self.planeWidgets[index].Off()
-      else:
-        self.planeWidgets[index].On()
+    # TODO: Find a better way to see if connection is made
+    if (self.planeWidgets[0].GetResliceOutput().GetDimensions() > (0,0,0)):
+      index = -1
+      isChecked = widget.GetRepresentation().GetState()
+      if (widget == self.buttonWidgets[0]):
+        index = 0
+      elif (widget == self.buttonWidgets[1]):
+        index = 1
+      elif (widget == self.buttonWidgets[2]):
+        index = 2
+      index = (index + 1) % 3
+      if (index > -1):
+        if isChecked:
+          self.planeWidgets[index].Off()
+        else:
+          self.planeWidgets[index].On()
     return
     
   def Initialize(self):
@@ -310,46 +312,47 @@ from PyQt5.QtWidgets import QStackedWidget
     
 class Viewer2DStacked(QStackedWidget):
   resliceAxesChanged = pyqtSignal()
-  def __init__(self, parent=None):
+  def __init__(self, parent=None, axes=[0,1,2]):
     super(Viewer2DStacked, self).__init__(parent)
     # Create signal
+    print(axes)
     #planesModified = pyEvent()
-    for i in range(3):
-      widget = Viewer2D(self, i)
+    for i in range(len(axes)):
+      widget = Viewer2D(self, axes[i])
       self.addWidget(widget)
 
     # Add corner buttons
     fileName = ['./S00.png', './C00.png', './A00.png']
-    for i in range(3):
+    for i in range(self.count()):
       reader = vtk.vtkPNGReader()
-      reader.SetFileName(fileName[(i + 1) % 3])
+      reader.SetFileName(fileName[(axes[i] + 1) % 3])
       reader.Update()
       texture = reader.GetOutput()
       self.widget(i).AddCornerButton(texture)
 
-    # TODO: Add callback from 2D view to stack
-    for i in range(3):
+    # TODO: Add function to 2D view to assign a callback for button
+    for i in range(self.count()):
       self.widget(i).buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.btnClicked)
     
     # Make all views share the same cursor object
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).viewer.SetResliceCursor(self.widget(0).viewer.GetResliceCursor())
 
     # Cursor representation (anti-alias)
-    for i in range(3):
+    for i in range(self.count()):
       for j in range(3):
         prop = self.widget(i).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
         renderLinesAsTubes(prop)
-    for i in range(3):
+    for i in range(self.count()):
       color = [0.0, 0.0, 0.0]
-      color[i] = 1
+      color[axes[i]] = 1
       for j in range(3):
         color[j] = color[j] / 4.0
       self.widget(i).viewer.GetRenderer().SetBackground(color)
       self.widget(i).interactor.Disable()
 
     # Make them all share the same color map.
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).viewer.SetLookupTable(self.widget(0).viewer.GetLookupTable())
       
     # Establish callbacks
@@ -359,15 +362,15 @@ class Viewer2DStacked(QStackedWidget):
     index = index % 3
     self.setCurrentIndex(index)
   def Initialize(self):
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).Start()
 
   def EnableRenderOff(self):
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).viewer.GetInteractor().EnableRenderOff()
 
   def SetInputData(self, data):
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).SetInputData(data)
 
 # Local variables: #

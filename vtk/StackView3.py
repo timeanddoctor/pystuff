@@ -119,12 +119,12 @@ class FourPaneViewer(QMainWindow, ui):
       self.viewer3D.planeWidgets[i].InteractionOn()
 
     # Enable 2D viewers
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).viewer.GetRenderer().ResetCamera()
       self.stack.widget(i).viewer.GetInteractor().EnableRenderOn()
 
     # Enable interactors
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).interactor.Enable()
       self.stack.widget(i).viewer.GetInteractor().Enable()
 
@@ -138,7 +138,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.SetResliceMode(1)
 
   def ResetViews(self):
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).viewer.Reset()
 
     # Also sync the Image plane widget on the 3D view
@@ -153,14 +153,14 @@ class FourPaneViewer(QMainWindow, ui):
     self.Render()
 
   def Render(self):
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).viewer.Render()
     # Render 3D
     self.viewer3D.interactor.GetRenderWindow().Render()
 
   def SetResliceMode(self, mode):
     # Do we need to render planes if mode == 1?
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).viewer.SetResliceMode(mode)
       self.stack.widget(i).viewer.GetRenderer().ResetCamera()
       self.stack.widget(i).viewer.Render()
@@ -184,7 +184,7 @@ class FourPaneViewer(QMainWindow, ui):
     fileMenu.addAction(loadAct)
     fileMenu.addAction(exitAct)
 
-    self.stack = Viewer2DStacked(self)
+    self.stack = Viewer2DStacked(self, [0,1,2])
     self.vtk_widgets = []
 
     self.viewer3D = Viewer3D(self)
@@ -193,7 +193,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.establishCallbacks()
 
     # Show widgets but hide non-existing data
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).show()
       self.stack.widget(i).viewer.GetImageActor().SetVisibility(False)
 
@@ -248,7 +248,7 @@ class FourPaneViewer(QMainWindow, ui):
 
   def closeEvent(self, event):
     # Stops the renderer such that the application can close without issues
-    for i in range(3):
+    for i in range(self.stack.count()):
       self.stack.widget(i).interactor.close()
     self.viewer3D.interactor.close()
     event.accept()
