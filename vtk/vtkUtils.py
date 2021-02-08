@@ -2,12 +2,34 @@ import sys
 import vtk
 import numpy as np
 
+""" 
+impostor technique to make wide lines look like tubes to the
+lighting and depth buffer. For spheres it takes square point sprites
+and makes them look like spheres to the lighting and depth buffers. Be
+aware that for large meshes, rendering a 12*12 point sprite per vertex
+can result in a lot of pixels being drawn when the entire mesh is
+shown, so use this power judiciously.
+"""
+
+
 def renderLinesAsTubes(prop):
   prop.SetEdgeVisibility(1)
-  prop.SetPointSize(4)
+  prop.SetPointSize(4) # Should be larger than line width
   prop.SetLineWidth(3)
   prop.SetRenderLinesAsTubes(1)
   return prop
+
+def renderPointsAsSpheres(prop):
+  # Remember to set VertexColor and EdgeColor
+  prop.SetEdgeVisibility(1)
+  prop.SetPointSize(6)
+  prop.SetLineWidth(3)
+  prop.RenderPointsAsSpheres(1)
+  prop.SetVertexVisibility(1)
+
+def renderPointsAndLinesAsTubesAndSpheres(prop):
+  renderLinesAsTubes(prop)
+  renderLinesAsSpheres(prop)
 
 def polyInfo(filter):
   """

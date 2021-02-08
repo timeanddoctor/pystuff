@@ -45,10 +45,6 @@ class SmartLock(QMainWindow, ui):
     fileMenu.addAction(surfAct)
     fileMenu.addAction(exitAct)
 
-    self.btnSagittalUS.setVisible(False)
-    self.btnCoronalUS.setVisible(False)
-    self.btnAxialUS.setVisible(False)
-
     style = QCommonStyle()
     self.btnUpAzimuth.setIcon(style.standardIcon(QStyle.SP_ArrowUp))
     self.btnDownAzimuth.setIcon(style.standardIcon(QStyle.SP_ArrowDown))
