@@ -12,17 +12,11 @@ from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame, QStackedWidget, QPushButton
 
 from Viewer2D import Viewer2D
+from vtkUtils import renderLinesAsTubes
 
 ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
-
-def renderLinesAsTubes(prop):
-  prop.SetEdgeVisibility(1)
-  prop.SetPointSize(4)
-  prop.SetLineWidth(3)
-  prop.SetRenderLinesAsTubes(1)
-  return prop
 
 class callback(object):
   def __call__(self, o, e, d = None):

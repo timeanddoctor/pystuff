@@ -1,7 +1,7 @@
-# TODO: 1. Viewer2DStacked
-#       2. Main using it and 3D (hack)
-#       3. 3D widget
-#       4. Buttons on stacked widget
+# TODO: x. Viewer2DStacked 
+#       x. Main using it and 3D (hack)
+#       x. 3D widget
+#       x. Buttons on stacked widget
 #       5. Buttons on 3D widget
 
 import vtk
@@ -9,7 +9,7 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from collections import deque
 
-from PyQt5.QtWidgets import QHBoxLayout, QFrame
+from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QFrame
 from PyQt5.QtCore import pyqtSignal
 
 from vtkUtils import renderLinesAsTubes
@@ -17,39 +17,156 @@ from vtkUtils import renderLinesAsTubes
 class Viewer3D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer3D, self).__init__(parent)
+    self.interactor = QVTKRenderWindowInteractor(self)
+    self.renderer = vtk.vtkRenderer()
+    self.renderer.SetBackground(245.0/255.0,245.0/255.0,245.0/255.0)
+    self.renderer.SetBackground2(170.0/255.0,170.0/255.0,170.0/255.0)
+    self.renderer.GradientBackgroundOn()
+    
+    self.interactor.GetRenderWindow().AddRenderer(self.renderer)
 
-def try_callback(func, *args):
-    """Wrap a given callback in a try statement."""
-    import logging
-    try:
-        func(*args)
-    except Exception as e:
-        logging.warning('Encountered issue in callback: {}'.format(e))
+    self.planeWidgets = []
+    self.SetupPlaneWidgets()
+
+    layout = QHBoxLayout(self)
+    layout.setContentsMargins(0,0,0,0)
+    layout.addWidget(self.interactor)
+    self.setLayout(layout)
+    self.buttonWidgets = []
+    self.lastSize = (0,0) # Used for corner buttons
+
+  def SetupPlaneWidgets(self):
+    picker = vtk.vtkCellPicker()
+    picker.SetTolerance(0.005)
+    pwTextureProp = vtk.vtkProperty()
+    for i in range(3):
+      pw =  vtk.vtkImagePlaneWidget()
+      pw.SetInteractor(self.interactor)
+      pw.SetPicker(picker)
+      pw.RestrictPlaneToVolumeOn()
+      color = [0.0, 0.0, 0.0]
+      color[i] = 1
+      pw.GetPlaneProperty().SetColor(color)
+      pw.SetTexturePlaneProperty(pwTextureProp)
+      pw.TextureInterpolateOn()
+      pw.SetResliceInterpolateToLinear()
+      pw.DisplayTextOn()
+      pw.SetDefaultRenderer(self.renderer)
+
+      prop = pw.GetPlaneProperty()
+      renderLinesAsTubes(prop)
+      pw.SetPlaneProperty(prop)
+
+      prop = pw.GetSelectedPlaneProperty()
+      renderLinesAsTubes(prop)
+      pw.SetSelectedPlaneProperty(prop)
+      
+      prop = pw.GetCursorProperty()
+      renderLinesAsTubes(prop)
+      pw.SetCursorProperty(prop)
+
+      pw.Modified()
+      self.planeWidgets.append(pw)
+
+  def AddCornerButtons(self):
+    # Add corner buttons
+    fileName0 = ['./S00.png', './C00.png', './A00.png']
+    fileName1 = ['./S01.png', './C01.png', './A01.png']
+    for i in range(3):
+      reader = vtk.vtkPNGReader()
+      reader.SetFileName(fileName0[(i + 1) % 3])
+      reader.Update()
+      texture0 = reader.GetOutput()
+      reader = vtk.vtkPNGReader()
+      reader.SetFileName(fileName1[(i + 1) % 3])
+      reader.Update()
+      texture1 = reader.GetOutput()
+      self.AddCornerButton(texture0, texture1)
+
+  def AddCornerButton(self, texture0, texture1):
+    """
+    Add corner button. TODO: Support callback argument
+    """
+
+    # Render to ensure viewport has the right size (it has not)
+    buttonRepresentation = vtk.vtkTexturedButtonRepresentation2D()
+    buttonRepresentation.SetNumberOfStates(2)
+    buttonRepresentation.SetButtonTexture(0, texture0)
+    buttonRepresentation.SetButtonTexture(1, texture1)
+    buttonWidget = vtk.vtkButtonWidget()
+    buttonWidget.SetInteractor(self.interactor)
+    buttonWidget.SetRepresentation(buttonRepresentation)
+    buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.onTogglePlanesClicked)
+    buttonWidget.On()
+    self.buttonWidgets.append(buttonWidget)
+
+    renWin = self.interactor.GetRenderWindow()
+    renWin.AddObserver('ModifiedEvent', self.resizeCallback)
+
+  def onTogglePlanesClicked(self, widget, event):
+    # TODO: Find a better way to see if connection is made
+    if (self.planeWidgets[0].GetResliceOutput().GetDimensions() > (0,0,0)):
+      index = -1
+      isChecked = widget.GetRepresentation().GetState()
+      if (widget == self.buttonWidgets[0]):
+        index = 0
+      elif (widget == self.buttonWidgets[1]):
+        index = 1
+      elif (widget == self.buttonWidgets[2]):
+        index = 2
+      index = (index + 1) % 3
+      if (index > -1):
+        if isChecked:
+          self.planeWidgets[index].Off()
+        else:
+          self.planeWidgets[index].On()
     return
     
-def callback(val):
-    print("Button pressed!")
+  def Initialize(self):
+    self.interactor.Initialize()
+    self.interactor.Start()
 
+  def resizeCallback(self, widget, event):
+    """
+    Callback for repositioning button. Only observe this if
+    a button is added
+    """
+    curSize = widget.GetSize()
+    if (curSize != self.lastSize):
+      self.lastSize = curSize
+    
+      upperRight = vtk.vtkCoordinate()
+      upperRight.SetCoordinateSystemToNormalizedDisplay()
+      upperRight.SetValue(1.0, 1.0)
 
-def _the_callback(widget, event):
-    value = widget.GetRepresentation().GetState()
-    if hasattr(callback, '__call__'):
-        try_callback(callback, value)
-    return
+      renderer = self.renderer # self.planeWidget[0].GetDefaultRenderer()
+      for i in range(len(self.buttonWidgets)):
+        buttonRepresentation = self.buttonWidgets[i].GetRepresentation()
 
+        bds = [0]*6
+        sz = 40.0
+        bds[0] = upperRight.GetComputedDisplayValue(renderer)[0] - (i+1)*sz
+        bds[1] = bds[0] + sz
+        bds[2] = upperRight.GetComputedDisplayValue(renderer)[1] - sz
+        bds[3] = bds[2] + sz
+        bds[4] = bds[5] = 0.0
+      
+        # Scale to 1, default is .5
+        buttonRepresentation.SetPlaceFactor(1)
+        buttonRepresentation.PlaceWidget(bds)
     
 class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
-    interactor = QVTKRenderWindowInteractor(self)
+    interactor = QVTKRenderWindowInteractor(self) # This is a QWidget
     self.edgeActor = None # Actor for contours
     self.iDim = iDim      # Slice dimensions
     self.lastSize = (0,0) # Used for corner button
     self.buttonWidget = None 
-    self.layout = QHBoxLayout(self)
-    self.layout.addWidget(interactor)
-    self.layout.setContentsMargins(0, 0, 0, 0)
-    self.setLayout(self.layout)
+    layout = QHBoxLayout(self)
+    layout.addWidget(interactor)
+    layout.setContentsMargins(0, 0, 0, 0)
+    self.setLayout(layout)
 
     self.viewer = vtk.vtkResliceImageViewer()
     self.viewer.SetupInteractor(interactor)
@@ -106,8 +223,6 @@ class Viewer2D(QFrame):
     self.buttonWidget.SetInteractor(self.viewer.GetInteractor())
     self.buttonWidget.SetRepresentation(buttonRepresentation)
 
-    #self.buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, _the_callback)
-    
     self.buttonWidget.On()
 
     renWin = self.viewer.GetRenderWindow()
@@ -197,46 +312,47 @@ from PyQt5.QtWidgets import QStackedWidget
     
 class Viewer2DStacked(QStackedWidget):
   resliceAxesChanged = pyqtSignal()
-  def __init__(self, parent=None):
+  def __init__(self, parent=None, axes=[0,1,2]):
     super(Viewer2DStacked, self).__init__(parent)
     # Create signal
+    print(axes)
     #planesModified = pyEvent()
-    for i in range(3):
-      widget = Viewer2D(self, i)
+    for i in range(len(axes)):
+      widget = Viewer2D(self, axes[i])
       self.addWidget(widget)
 
     # Add corner buttons
     fileName = ['./S00.png', './C00.png', './A00.png']
-    for i in range(3):
+    for i in range(self.count()):
       reader = vtk.vtkPNGReader()
-      reader.SetFileName(fileName[(i + 1) % 3])
+      reader.SetFileName(fileName[(axes[i] + 1) % 3])
       reader.Update()
       texture = reader.GetOutput()
       self.widget(i).AddCornerButton(texture)
 
-    # TODO: Add callback from 2D view to stack
-    for i in range(3):
+    # TODO: Add function to 2D view to assign a callback for button
+    for i in range(self.count()):
       self.widget(i).buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.btnClicked)
     
     # Make all views share the same cursor object
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).viewer.SetResliceCursor(self.widget(0).viewer.GetResliceCursor())
 
     # Cursor representation (anti-alias)
-    for i in range(3):
+    for i in range(self.count()):
       for j in range(3):
         prop = self.widget(i).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
         renderLinesAsTubes(prop)
-    for i in range(3):
+    for i in range(self.count()):
       color = [0.0, 0.0, 0.0]
-      color[i] = 1
+      color[axes[i]] = 1
       for j in range(3):
         color[j] = color[j] / 4.0
       self.widget(i).viewer.GetRenderer().SetBackground(color)
       self.widget(i).interactor.Disable()
 
     # Make them all share the same color map.
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).viewer.SetLookupTable(self.widget(0).viewer.GetLookupTable())
       
     # Establish callbacks
@@ -246,15 +362,15 @@ class Viewer2DStacked(QStackedWidget):
     index = index % 3
     self.setCurrentIndex(index)
   def Initialize(self):
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).Start()
 
   def EnableRenderOff(self):
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).viewer.GetInteractor().EnableRenderOff()
 
   def SetInputData(self, data):
-    for i in range(3):
+    for i in range(self.count()):
       self.widget(i).SetInputData(data)
 
 # Local variables: #
