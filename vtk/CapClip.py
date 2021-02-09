@@ -117,6 +117,20 @@ def main():
     renderer.GetActiveCamera().Dolly(1.2)
     renderer.ResetCameraClippingRange()
 
+    # Print number of open edges
+    featureEdges = vtk.vtkFeatureEdges()
+    featureEdges.FeatureEdgesOff()
+    featureEdges.BoundaryEdgesOn()
+    featureEdges.NonManifoldEdgesOn()
+
+    featureEdges.Update()
+    print("Number of open edges: % d" % (featureEdges.GetOutput().GetNumberOfCells()))
+
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetFileName('./output.vtp')
+    writer.SetInputConnection(cleanFilter.GetOutputPort())
+    writer.Update()
+
     renderWindow.Render()
     renderWindow.SetWindowName('CapClip')
     renderWindow.Render()
@@ -134,7 +148,7 @@ def ReadPolyData(file_name):
         reader.Update()
         poly_data = reader.GetOutput()
     elif extension == ".vtp":
-        reader = vtk.vtkXMLpoly_dataReader()
+        reader = vtk.vtkXMLPolyDataReader()
         reader.SetFileName(file_name)
         reader.Update()
         poly_data = reader.GetOutput()
