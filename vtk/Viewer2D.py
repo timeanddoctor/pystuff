@@ -6,6 +6,7 @@
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+from vtk.util.colors import red, yellow
 
 from collections import deque
 
@@ -34,7 +35,20 @@ class Viewer3D(QFrame):
     self.setLayout(layout)
     self.buttonWidgets = []
     self.lastSize = (0,0) # Used for corner buttons
+  def EnablePlaneWidgets(self, reader):
+    imageDims = reader.GetOutput().GetDimensions()
+    for i in range(3):
+      self.planeWidgets[i].SetInputConnection(reader.GetOutputPort())
+      self.planeWidgets[i].SetPlaneOrientation(i)
+      self.planeWidgets[i].SetSliceIndex(imageDims[i] // 2)
+      self.planeWidgets[i].GetInteractor().Enable()
+      self.planeWidgets[i].On()
+      self.planeWidgets[i].InteractionOn()
 
+  def Off(self):
+    for i in range(len(self.planeWidgets)):
+      self.planeWidgets[i].Off()
+      
   def SetupPlaneWidgets(self):
     picker = vtk.vtkCellPicker()
     picker.SetTolerance(0.005)
@@ -103,9 +117,12 @@ class Viewer3D(QFrame):
     renWin = self.interactor.GetRenderWindow()
     renWin.AddObserver('ModifiedEvent', self.resizeCallback)
 
+  def dataValid(self):
+    return self.planeWidgets[0].GetResliceOutput().GetDimensions() > (0,0,0)
+
   def onTogglePlanesClicked(self, widget, event):
     # TODO: Find a better way to see if connection is made
-    if (self.planeWidgets[0].GetResliceOutput().GetDimensions() > (0,0,0)):
+    if (self.dataValid()):
       index = -1
       isChecked = widget.GetRepresentation().GetState()
       if (widget == self.buttonWidgets[0]):
@@ -181,7 +198,9 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
-
+  def Enable(self):
+    self.viewer.GetRenderer().ResetCamera()
+    self.viewer.GetInteractor().EnableRenderOn()
   def resizeCallback(self, widget, event):
     """
     Callback for repositioning button. Only observe this if
@@ -259,7 +278,7 @@ class Viewer2D(QFrame):
 
     # Generate line segments
     cutEdges = vtk.vtkCutter()
-    cutEdges.SetInputConnection(main_window.vesselNormals.GetOutputPort())
+    cutEdges.SetInputConnection(data.GetOutputPort())#main_window.vesselNormals.GetOutputPort())
     cutEdges.SetCutFunction(self.plane)
     cutEdges.GenerateCutScalarsOff()
     cutEdges.SetValue(0, 0.5)
@@ -354,6 +373,17 @@ class Viewer2DStacked(QStackedWidget):
     # Make them all share the same color map.
     for i in range(self.count()):
       self.widget(i).viewer.SetLookupTable(self.widget(0).viewer.GetLookupTable())
+  def close(self):
+    for i in range(self.count()):
+      self.widget(i).interactor.close()
+  def dataValid(self):
+    return self.widget(0).viewer.GetInput() is not None
+      
+  def ShowWidgetHideData(self):
+    # Show widgets but hide non-existing data (MOVE TO Stack)
+    for i in range(self.count()):
+      self.widget(i).show()
+      self.widget(i).viewer.GetImageActor().SetVisibility(False)
       
     # Establish callbacks
   def btnClicked(self, widget, event):
@@ -361,6 +391,10 @@ class Viewer2DStacked(QStackedWidget):
     index = index + 1
     index = index % 3
     self.setCurrentIndex(index)
+    # Hide other actors
+    #if (self.dataValid()):
+    #  for i in range(3):
+    #    self.widget(i).viewer.GetImageActor().SetVisibility((lambda x: True if x == index else False)(i))
   def Initialize(self):
     for i in range(self.count()):
       self.widget(i).Start()

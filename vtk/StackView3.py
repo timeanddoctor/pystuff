@@ -192,11 +192,7 @@ class FourPaneViewer(QMainWindow, ui):
     
     self.establishCallbacks()
 
-    # Show widgets but hide non-existing data
-    for i in range(self.stack.count()):
-      self.stack.widget(i).show()
-      self.stack.widget(i).viewer.GetImageActor().SetVisibility(False)
-
+    self.stack.ShowWidgetHideData()
     # Layouts (to edges)
     #self.horizontalLayout.setContentsMargins(0,0,0,0)
     

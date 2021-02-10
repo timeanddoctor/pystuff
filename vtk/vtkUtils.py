@@ -11,6 +11,12 @@ can result in a lot of pixels being drawn when the entire mesh is
 shown, so use this power judiciously.
 """
 
+def hexCol(s):
+  if isinstance(s,str):
+    if "#" in s:
+      s = s.lstrip("#")
+    return tuple(int(s[i : i + 2], 16)/255.0 for i in (0, 2, 4))
+  return None
 
 def renderLinesAsTubes(prop):
   prop.SetEdgeVisibility(1)

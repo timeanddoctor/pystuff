@@ -1,10 +1,16 @@
 #!/bin/env python3
 
-# TODO: Load CT
-#       Load Vessels
-#       Load Surface
-#       Stack of 2 widgets
-#       Ultrasound
+# TODO: Stack of 2 widgets (postponed)
+#       View Axial and Coronal Ultrasound
+#       Sync views
+#       Contours in US
+# Thur
+#       Coordinates
+#       Grap US image
+#       Run segmentation
+# Fri
+#       Transform plane (correction), slice and back
+#       Introduce offset
 
 import os
 import sys
@@ -16,11 +22,56 @@ from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
 from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter
 
+from vtkUtils import hexCol, renderLinesAsTubes
+
 ui_file = os.path.join(os.path.dirname(__file__), 'SmartLock3.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
-from Viewer2D import Viewer3D, Viewer2DStacked
+from Viewer2D import Viewer3D, Viewer2D, Viewer2DStacked
+
+class ResliceCallback(object):
+  def __init__(self):
+    self.IPW = None
+    self.RCW = None
+
+  def onResliceAxesChanged(self, caller, ev):
+    if (caller.GetClassName() == 'vtkResliceCursorWidget'):
+      rep = caller.GetRepresentation()
+      rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
+      # Update 3D widget
+      for i in range(3):
+        # Only needed for the actual plane (TODO: Optimize)
+        pda = self.IPW[i].GetPolyDataAlgorithm()
+        ps = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource()
+        origin = ps.GetOrigin()
+        pda.SetOrigin(origin)
+        pda.SetPoint1(ps.GetPoint1())
+        pda.SetPoint2(ps.GetPoint2())
+        # If the reslice plane has modified, update it on the 3D widget
+        self.IPW[i].UpdatePlacement()
+        main_window.stackCT.widget(i).UpdateContour()
+    self.render()
+  def onEndWindowLevelChanged(self, caller, ev):
+    wl = [main_window.stackCT.widget(0).viewer.GetColorWindow(), main_window.stackCT.widget(0).viewer.GetColorLevel()]
+    main_window.stackCT.widget(0).viewer.SetColorWindow(wl[0])
+    main_window.stackCT.widget(0).viewer.SetColorLevel(wl[1])
+    return
+
+  def onWindowLevelChanged(self, caller, ev):
+    # 3D -> 2D views
+    if (caller.GetClassName() == 'vtkImagePlaneWidget'):
+      wl = [caller.GetWindow(), caller.GetLevel()]
+      main_window.stackCT.widget(0).viewer.SetColorWindow(wl[0])
+      main_window.stackCT.widget(0).viewer.SetColorLevel(wl[1])
+    self.render()
+
+  def render(self):
+    # Render views
+    for i in range(3):
+      self.RCW[i].Render()
+    # Render 3D
+    self.IPW[0].GetInteractor().GetRenderWindow().Render()
 
 class SmartLock(QMainWindow, ui):
   def __init__(self):
@@ -33,21 +84,30 @@ class SmartLock(QMainWindow, ui):
     self.stackCT.Initialize()
     # 3D viewer
     self.viewer3D.Initialize()
+    # Initialize US views
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].Start()
+
   def setupMenu(self):
-    loadAct = QAction('&Open', self)
+    loadAct = QAction('&Open CT', self)
     loadAct.setShortcut('Ctrl+O')
-    loadAct.setStatusTip('Load data')
+    loadAct.setStatusTip('Load CT data')
     loadAct.triggered.connect(lambda: self.onLoadClicked(0))
 
     outerSurfAct = QAction('Open &Exterior Surface', self)
     outerSurfAct.setShortcut('Ctrl+E')
     outerSurfAct.setStatusTip('Surf data')
-    outerSurfAct.triggered.connect(lambda: self.onLoadClicked(1))
+    outerSurfAct.triggered.connect(lambda: self.onLoadClicked(2))
 
     innerSurfAct = QAction('Open &Interior Surface', self)
     innerSurfAct.setShortcut('Ctrl+I')
     innerSurfAct.setStatusTip('Surf data')
     innerSurfAct.triggered.connect(lambda: self.onLoadClicked(1))
+
+    loadUSAct = QAction('Open &US', self)
+    loadUSAct.setShortcut('Ctrl+U')
+    loadUSAct.setStatusTip('Load US data')
+    loadUSAct.triggered.connect(lambda: self.onLoadClicked(3))
     
     exitAct = QAction('&Exit', self)
     exitAct.setShortcut('ALT+F4')
@@ -59,6 +119,7 @@ class SmartLock(QMainWindow, ui):
     fileMenu.addAction(loadAct)
     fileMenu.addAction(outerSurfAct)
     fileMenu.addAction(innerSurfAct)
+    fileMenu.addAction(loadUSAct)
     fileMenu.addAction(exitAct)
     
   def setup(self):
@@ -92,7 +153,7 @@ class SmartLock(QMainWindow, ui):
     # Setup 3D viewer
     self.viewer3D = Viewer3D(self)
     self.viewer3D.AddCornerButtons()
-    
+
     self.layout3D.setContentsMargins(0,0,0,0)
     self.layout3D.addWidget(self.viewer3D)
 
@@ -101,16 +162,259 @@ class SmartLock(QMainWindow, ui):
     self.layoutCT.setContentsMargins(0,0,0,0)
     self.layoutCT.insertWidget(0,self.stackCT)
 
+    # Setup US views
+    self.viewUS = []
+    self.viewUS.append(Viewer2D(self, 1))
+    self.viewUS.append(Viewer2D(self, 2))
+
+    # Make all views share the same cursor object
+    for i in range(2):
+      self.viewUS[i].viewer.SetResliceCursor(self.viewUS[0].viewer.GetResliceCursor())
+
+    # Cursor representation (anti-alias)
+    for i in range(len(self.viewUS)):
+      for j in range(3):
+        prop = self.viewUS[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(j)
+        renderLinesAsTubes(prop)
+    
+    # Remove when stacked works for 2 images
+    for i in range(len(self.viewUS)):
+      # Set background for 2D views
+      color = [0.0, 0.0, 0.0]
+      color[self.viewUS[i].iDim] = 1
+      for j in range(3):
+        color[j] = color[j] / 4.0
+      self.viewUS[i].viewer.GetRenderer().SetBackground(color)
+      self.viewUS[i].interactor.Disable()
+        
+    self.establishCallbacks()
+    
     # Show widgets but hide non-existing data
     for i in range(3):
       self.stackCT.widget(i).show()
       self.stackCT.widget(i).viewer.GetImageActor().SetVisibility(False)
+
+    # Show widgets but hide non-existing data
+    for i in range(2):
+      self.viewUS[i].show()
+      self.viewUS[i].viewer.GetImageActor().SetVisibility(False)
+
+    self.layoutUS0.setContentsMargins(0,0,0,0)
+    self.layoutUS0.insertWidget(0, self.viewUS[0])
+    self.layoutUS1.setContentsMargins(0,0,0,0)
+    self.layoutUS1.insertWidget(0, self.viewUS[1])
+      
+  def onLoadClicked(self, fileType):
+    mySettings = QSettings()
+    fileDir = mySettings.value(self.DEFAULT_DIR_KEY)
+    print(fileDir)
+    options = QFileDialog.Options()
+    options |= QFileDialog.DontUseNativeDialog
+    fileDialog = QFileDialog()
+    fileDialog.setDirectory(fileDir)
+
+    defaultFile = {0 : 'CT-Abdomen.mhd',
+                   1 : 'Connected.vtp',
+                   2 : 'Liver_3D_Fast_Marching_Closed.vtp',
+                   3 : 'VesselVolume.mhd'}[fileType]
+
+    defaultFile = os.path.join(fileDir, defaultFile)
     
+    fileName, _ = \
+      fileDialog.getOpenFileName(self,
+                                 "QFileDialog.getOpenFileName()",
+                                 defaultFile, "All Files (*);;MHD Files (*.mhd);; VTP Files (*.vtp)",
+                                 options=options)
+    if fileName:
+      # Update default dir
+      currentDir = QFileInfo(fileName).absoluteDir()
+      mySettings.setValue(self.DEFAULT_DIR_KEY,
+                          currentDir.absolutePath())
+      info = QFileInfo(fileName)
+      if (info.completeSuffix() == "mhd") and fileType == 0:
+        # Load data
+        self.loadFile(fileName)
+      elif (info.completeSuffix() == "vtp") and fileType == 1:
+        self.loadSurface(fileName, contours=True)
+      elif (info.completeSuffix() == "vtp") and fileType == 2:
+        self.loadSurface(fileName, contours=False)
+      elif (info.completeSuffix() == "mhd") and fileType == 3:
+        self.loadUSFile(fileName)
+
+  def loadSurface(self, fileName, contours=True):
+    reader = vtk.vtkXMLPolyDataReader()
+    reader.SetFileName(fileName)
+    reader.Update()
+
+    # Take the largest connected component
+    connectFilter = vtk.vtkPolyDataConnectivityFilter()
+    connectFilter.SetInputConnection(reader.GetOutputPort())
+    connectFilter.SetExtractionModeToLargestRegion()
+    connectFilter.Update();
+
+    self.vesselPolyData = connectFilter.GetOutput()
+
+    # Compute normals
+    self.vesselNormals = vtk.vtkPolyDataNormals()
+    self.vesselNormals.SetInputData(self.vesselPolyData)
+
+    # Mapper
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(self.vesselNormals.GetOutputPort())
+
+    # Actor for vessels
+    self.vessels = vtk.vtkActor()
+    self.vessels.SetMapper(mapper)
+    prop = self.vessels.GetProperty()
+    prop.SetColor(vtk.vtkColor3d(hexCol("#517487"))) # 25% lighter
+
+    # Assign actor to the renderer
+    prop.SetOpacity(0.35)
+    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.vessels)
+    if contours:
+      for i in range(self.stackCT.count()):
+        self.stackCT.widget(i).InitializeContour(self.vesselNormals)
+    self.Render()
+
+  # TODO
+  def loadUSFile(self, fileName):
+    # Load VTK Meta Image
+    reader = vtk.vtkMetaImageReader()
+    reader.SetFileName(fileName)
+    reader.Update()
+    imageDims = reader.GetOutput().GetDimensions()
+
+    # Disable renderers
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.GetInteractor().EnableRenderOff()
+
+    # Share one cursor object
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.SetResliceCursor(self.viewUS[0].viewer.GetResliceCursor())
+      
+    # Assign data to 2D viewers sharing one cursorobject
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.SetInputData(reader.GetOutput())
+
+    # Enable 2D viewers
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.GetRenderer().ResetCamera()
+      self.viewUS[i].viewer.GetInteractor().EnableRenderOn()
+
+    # Enable interactors
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.GetInteractor().Enable()
+
+    # Update 3D
+    self.ResetUSViews()
+    self.SetUSResliceMode(1)
+    
+  def loadFile(self, fileName):
+    # Load VTK Meta Image
+    reader = vtk.vtkMetaImageReader()
+    reader.SetFileName(fileName)
+    reader.Update()
+    imageDims = reader.GetOutput().GetDimensions()
+
+    # Disable renderers and widgets
+    self.stackCT.EnableRenderOff()
+    self.viewer3D.interactor.EnableRenderOff()
+
+    # Turn-off plane widgets
+    self.viewer3D.Off()
+
+    # Assign data to 2D viewers sharing one cursorobject
+    self.stackCT.SetInputData(reader.GetOutput())
+
+    # Enable plane widgets
+    self.viewer3D.EnablePlaneWidgets(reader)
+
+    # Enable 2D viewers
+    for i in range(self.stackCT.count()):
+      self.stackCT.widget(i).viewer.GetRenderer().ResetCamera()
+      self.stackCT.widget(i).viewer.GetInteractor().EnableRenderOn()
+
+    # Enable interactors
+    for i in range(self.stackCT.count()):
+      self.stackCT.widget(i).interactor.Enable()
+      self.stackCT.widget(i).viewer.GetInteractor().Enable()
+
+    # Enable 3D rendering
+    self.viewer3D.interactor.EnableRenderOn()
+
+    # Reset camera for the renderer - otherwise it is set using dummy data
+    self.viewer3D.planeWidgets[0].GetDefaultRenderer().ResetCamera()
+
+    # Update 3D
+    self.ResetViews()
+    self.SetResliceMode(1)
+
+  def establishCallbacks(self):
+    self.cb = ResliceCallback()
+    self.cb.IPW = []
+    self.cb.RCW = []
+    for i in range(3):
+      self.cb.IPW.append(self.viewer3D.planeWidgets[i])
+      self.cb.RCW.append(self.stackCT.widget(i).viewer.GetResliceCursorWidget())
+
+    for i in range(3):
+      self.stackCT.widget(i).viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, self.cb.onResliceAxesChanged)
+      self.stackCT.widget(i).viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.stackCT.widget(i).viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
+      self.stackCT.widget(i).viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
+
+      # Ignored after loading data!!! (why)
+      self.stackCT.widget(i).viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.stackCT.widget(i).viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
+
+      self.viewer3D.planeWidgets[i].AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+
+      # Colormap from 2D to 3D widget
+      self.viewer3D.planeWidgets[i].GetColorMap().SetLookupTable(self.stackCT.widget(0).viewer.GetLookupTable())
+      self.viewer3D.planeWidgets[i].SetColorMap(self.stackCT.widget(i).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
+    
+  def ResetViews(self):
+    for i in range(self.stackCT.count()):
+      self.stackCT.widget(i).viewer.Reset()
+
+    # Also sync the Image plane widget on the 3D view
+    for i in range(3):
+      ps = self.viewer3D.planeWidgets[i].GetPolyDataAlgorithm()
+      ps.SetNormal(self.stackCT.widget(0).viewer.GetResliceCursor().GetPlane(i).GetNormal())
+      ps.SetCenter(self.stackCT.widget(0).viewer.GetResliceCursor().GetPlane(i).GetOrigin())
+      # If the reslice plane has modified, update it on the 3D widget
+      self.viewer3D.planeWidgets[i].UpdatePlacement()
+
+    # Render once
+    self.Render()
+
+  def ResetUSViews(self):
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.Reset()
+    
+  def Render(self):
+    for i in range(self.stackCT.count()):
+      self.stackCT.widget(i).viewer.Render()
+    # Render 3D
+    self.viewer3D.interactor.GetRenderWindow().Render()
+
+  def SetResliceMode(self, mode):
+    # Do we need to render planes if mode == 1?
+    for i in range(self.stackCT.count()):
+      self.stackCT.widget(i).viewer.SetResliceMode(mode)
+      self.stackCT.widget(i).viewer.GetRenderer().ResetCamera()
+      self.stackCT.widget(i).viewer.Render()
+  def SetUSResliceMode(self, mode):
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.SetResliceMode(mode)
+      self.viewUS[i].viewer.GetRenderer().ResetCamera()
+      self.viewUS[i].viewer.Render()
   def closeEvent(self, event):
     # Stops the renderer such that the application can close without issues
-    #for i in range(3):
-    #  self.vtk_widgets[i].interactor.close()
-    #self.vtk_widgets[3].close()
+    self.stackCT.close()
+    self.viewer3D.interactor.close()
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].interactor.close()
     event.accept()
 
 if __name__ == '__main__':
