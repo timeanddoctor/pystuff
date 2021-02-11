@@ -146,16 +146,6 @@
           <enum>QFrame::Raised</enum>
          </property>
          <layout class="QVBoxLayout" name="layoutUS0">
-          <item>
-           <widget class="QWidget" name="widget" native="true">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-           </widget>
-          </item>
          </layout>
         </widget>
        </widget>
@@ -275,6 +265,16 @@
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_3">
             <item>
+             <widget class="QPushButton" name="btnSyncUSCT">
+              <property name="text">
+               <string>Sync</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QPushButton" name="pushButton_13">
               <property name="text">
                <string>Seg</string>
@@ -339,7 +339,7 @@
          <item>
           <layout class="QHBoxLayout" name="horzSyncLayout">
            <item>
-            <widget class="QPushButton" name="pushButton_9">
+            <widget class="QPushButton" name="btnSyncCTUS">
              <property name="text">
               <string>Sync</string>
              </property>
@@ -362,9 +362,24 @@
             </spacer>
            </item>
            <item>
-            <widget class="QPushButton" name="pushButton_12">
-             <property name="text">
-              <string>Preset</string>
+            <widget class="QComboBox" name="cboxPreset">
+             <item>
+              <property name="text">
+               <string>Default</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>CT - Liver</string>
+              </property>
+             </item>
+             <property name="geometry">
+              <rect>
+               <x>120</x>
+               <y>60</y>
+               <width>53</width>
+               <height>22</height>
+              </rect>
              </property>
             </widget>
            </item>

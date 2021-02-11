@@ -267,7 +267,7 @@ class Viewer2D(QFrame):
     cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
     self.viewer.GetRenderer().AddViewProp(cornerAnnotation)
 
-  def InitializeContour(self, data):
+  def InitializeContour(self, data, color=yellow):
     # Update contours
     self.plane = vtk.vtkPlane()
     RCW = self.viewer.GetResliceCursorWidget()    

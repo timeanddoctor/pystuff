@@ -17,6 +17,7 @@ import sys
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
@@ -30,15 +31,35 @@ ui, QMainWindow = loadUiType(ui_file)
 
 from Viewer2D import Viewer3D, Viewer2D, Viewer2DStacked
 
+# Initialize this using either CT or US
 class ResliceCallback(object):
   def __init__(self):
     self.IPW = None
     self.RCW = None
-
+    self.syncViews = False
   def onResliceAxesChanged(self, caller, ev):
     if (caller.GetClassName() == 'vtkResliceCursorWidget'):
       rep = caller.GetRepresentation()
       rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
+      if self.syncViews:
+        # TODO: Call this when button is clicked
+        cursor = rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
+        src = self.RCW[0].GetResliceCursorRepresentation().GetResliceCursor()
+        dest = main_window.viewUS[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
+        for i in range(3):
+          normal = src.GetPlane(i).GetNormal()
+          dest.GetPlane(i).SetNormal(normal)
+          origin = src.GetPlane(i).GetOrigin()
+          dest.GetPlane(i).SetOrigin(origin)
+          if i > 0:
+            if (rep == self.RCW[i].GetResliceCursorRepresentation()):
+              target = main_window.viewUS[i-1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
+              target.SetCenter(cursor.GetCenter())
+        for i in range(2):
+          main_window.viewUS[i].UpdateContour()
+        # TODO: Handle no US and update plane widget (see C++)
+          
+        
       # Update 3D widget
       for i in range(3):
         # Only needed for the actual plane (TODO: Optimize)
@@ -51,7 +72,8 @@ class ResliceCallback(object):
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
         main_window.stackCT.widget(i).UpdateContour()
-    self.render()
+        
+    self.render() # TODO: Consider partly rendering
   def onEndWindowLevelChanged(self, caller, ev):
     wl = [main_window.stackCT.widget(0).viewer.GetColorWindow(), main_window.stackCT.widget(0).viewer.GetColorLevel()]
     main_window.stackCT.widget(0).viewer.SetColorWindow(wl[0])
@@ -72,7 +94,42 @@ class ResliceCallback(object):
       self.RCW[i].Render()
     # Render 3D
     self.IPW[0].GetInteractor().GetRenderWindow().Render()
+    if self.syncViews:
+      for i in range(2):
+        main_window.viewUS[i].viewer.GetResliceCursorWidget().Render()
 
+class ResliceCallbackUS(object):
+  def __init__(self):
+    self.RCW = None
+    self.syncViews = False
+  def onResliceAxesChanged(self, caller, ev):
+    if (caller.GetClassName() == 'vtkResliceCursorWidget'):
+      rep = caller.GetRepresentation()
+      rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
+      for i in range(2):
+        main_window.viewUS[i].UpdateContour()
+        
+    self.render() # TODO: Consider partly rendering
+  def onEndWindowLevelChanged(self, caller, ev):
+    wl = [main_window.viewUS[0].viewer.GetColorWindow(), main_window.viewUS[0].viewer.GetColorLevel()]
+    main_window.viewUS[0].viewer.SetColorWindow(wl[0])
+    main_window.viewUS[0].viewer.SetColorLevel(wl[1])
+    return
+
+  def onWindowLevelChanged(self, caller, ev):
+    # 3D -> 2D views (never happens)
+    if (caller.GetClassName() == 'vtkImagePlaneWidget'):
+      wl = [caller.GetWindow(), caller.GetLevel()]
+      main_window.viewUS[0].viewer.SetColorWindow(wl[0])
+      main_window.viewUS[0].viewer.SetColorLevel(wl[1])
+    self.render()
+
+  def render(self):
+    # Render views
+    for i in range(2):
+      self.RCW[i].Render()
+
+    
 class SmartLock(QMainWindow, ui):
   def __init__(self):
     super(SmartLock, self).__init__()
@@ -121,6 +178,30 @@ class SmartLock(QMainWindow, ui):
     fileMenu.addAction(innerSurfAct)
     fileMenu.addAction(loadUSAct)
     fileMenu.addAction(exitAct)
+
+    self.cboxPreset.currentIndexChanged.connect(self.onApplyPresetClicked)
+    self.cboxPreset.setCurrentIndex(0)
+    self.btnSyncCTUS.clicked.connect(lambda: self.onSyncClicked(0))
+    self.btnSyncUSCT.clicked.connect(lambda: self.onSyncClicked(1))
+  def onSyncClicked(self, index):
+    if index == 0:
+      self.cb.syncViews = True
+  def onApplyPresetClicked(self, index):
+    window = 200
+    level = 100
+    index = self.cboxPreset.currentIndex()
+
+    if (index == 0):
+      rng = [0,0]
+      if (self.stackCT.widget(0)):
+        rng = self.stackCT.widget(0).viewer.GetInput().GetScalarRange()
+        window = rng[1]-rng[0]
+        level = (rng[0]+rng[1])/2.0
+    for i in range(3):
+      if self.stackCT.widget(i):
+        self.stackCT.widget(i).viewer.SetColorWindow(window)
+        self.stackCT.widget(i).viewer.SetColorLevel(level)
+        self.stackCT.widget(i).viewer.Render()
     
   def setup(self):
     self.setupUi(self)
@@ -271,9 +352,12 @@ class SmartLock(QMainWindow, ui):
     # Assign actor to the renderer
     prop.SetOpacity(0.35)
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.vessels)
+    # TODO: Make this work if read before US
     if contours:
       for i in range(self.stackCT.count()):
-        self.stackCT.widget(i).InitializeContour(self.vesselNormals)
+        self.stackCT.widget(i).InitializeContour(self.vesselNormals,color=red)
+      for i in range(len(self.viewUS)):
+        self.viewUS[i].InitializeContour(self.vesselNormals)
     self.Render()
 
   # TODO
@@ -294,7 +378,7 @@ class SmartLock(QMainWindow, ui):
       
     # Assign data to 2D viewers sharing one cursorobject
     for i in range(len(self.viewUS)):
-      self.viewUS[i].viewer.SetInputData(reader.GetOutput())
+      self.viewUS[i].SetInputData(reader.GetOutput())
 
     # Enable 2D viewers
     for i in range(len(self.viewUS)):
@@ -372,7 +456,21 @@ class SmartLock(QMainWindow, ui):
       # Colormap from 2D to 3D widget
       self.viewer3D.planeWidgets[i].GetColorMap().SetLookupTable(self.stackCT.widget(0).viewer.GetLookupTable())
       self.viewer3D.planeWidgets[i].SetColorMap(self.stackCT.widget(i).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
-    
+
+    self.cb1 = ResliceCallbackUS()
+    self.cb1.RCW = []
+    for i in range(2):
+      self.cb1.RCW.append(self.viewUS[i].viewer.GetResliceCursorWidget())
+    for i in range(2):
+      self.viewUS[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, self.cb1.onResliceAxesChanged)
+      self.viewUS[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb1.onWindowLevelChanged)
+      self.viewUS[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb1.onWindowLevelChanged)
+      self.viewUS[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb1.onResliceAxesChanged)
+
+      # Ignored after loading data!!! (why)
+      self.viewUS[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      self.viewUS[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
+  
   def ResetViews(self):
     for i in range(self.stackCT.count()):
       self.stackCT.widget(i).viewer.Reset()
