@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QS
 
 import numpy as np
 
-from vtkUtils import hexCol, renderLinesAsTubes
+from vtkUtils import hexCol, renderLinesAsTubes, AxesToTransform
 
 ui_file = os.path.join(os.path.dirname(__file__), 'SmartLock3.ui')
 
@@ -276,7 +276,7 @@ class SmartLock(QMainWindow, ui):
     print("Segmentation")
     showCoordinates = False
     savePNGImage = False
-    saveMetaImage = True
+    saveMetaImage = False
     
     # Both works
     #self.readOnScreenBuffer()
@@ -305,6 +305,8 @@ class SmartLock(QMainWindow, ui):
     dy = np.sqrt(np.sum((upperLeft - lowerLeft) ** 2)) / dims[1]
     self.segImage.SetSpacing(dx,dy,0)
 
+    self.trans = vtk.vtkMatrix4x4()
+    
     # Compute direction matrix
     sliceAxes = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceAxes()
     orientation = vtk.vtkMatrix3x3()
@@ -317,7 +319,21 @@ class SmartLock(QMainWindow, ui):
       self.segImage.Modified()
     else:
       # Compute transformation from x = (1,0,0), y = (0,1,0) to origin and new orientation
-      print('TODO')
+      normal0 = (0,0,1)
+      first0 = (1,0,0)
+      origin0 = (0,0,0)
+      
+      origin1 = lowerLeft
+      first1 = lowerRight - lowerLeft
+      second1 = upperLeft - lowerLeft
+
+      normal1 = np.cross(first1, second1)
+      normal1 = normal1 / np.sqrt(np.sum(normal1**2))
+      
+      first1 = first1 / np.sqrt(np.sum(first1**2))
+
+      self.trans = AxesToTransform(normal0, first0, origin0,
+                                   normal1, first1, origin1)
 
     if showCoordinates:
       for i in range(2):
@@ -330,7 +346,7 @@ class SmartLock(QMainWindow, ui):
           print("")
 
     # For VTK version 8.2, we need to add the orientation as a separate parameter
-    #self.segServer.execute.emit(self.segImage)
+    self.segServer.execute.emit(self.segImage, self.trans)
 
     if saveMetaImage:
       # Save to disk

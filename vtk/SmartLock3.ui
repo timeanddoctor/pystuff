@@ -275,14 +275,14 @@
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_13">
+             <widget class="QPushButton" name="btnSeg">
               <property name="text">
                <string>Seg</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_14">
+             <widget class="QPushButton" name="btnReg">
               <property name="text">
                <string>Reg</string>
               </property>

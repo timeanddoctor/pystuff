@@ -13,24 +13,26 @@ class SegmentationTask(QObject):
   def __init__(self, parent = None):
     super().__init__(parent)
 
-  @pyqtSlot('PyQt_PyObject')    
-  def execute(self, arg):
+  @pyqtSlot('PyQt_PyObject', 'PyQt_PyObject')    
+  def execute(self, arg, trans):
+    saveToDisk = False
     # Actual work - now done using SciPy
     print("running")
-    return
 
     smoother = vtk.vtkImageGaussianSmooth()
     smoother.SetStandardDeviations(2.0, 2.0)
     smoother.SetDimensionality(2)
     smoother.SetInputData(arg)
     smoother.Update()
-    
-    # Save to disk
-    writer = vtk.vtkMetaImageWriter()
-    writer.SetFileName('./output.mhd')
-    writer.SetInputConnection(smoother.GetOutputPort())
-    writer.Write()
 
+    if saveToDisk:
+      # Save to disk
+      writer = vtk.vtkMetaImageWriter()
+      writer.SetFileName('./output.mhd')
+      writer.SetInputConnection(smoother.GetOutputPort())
+      writer.Write()
+
+    return
     # Convert VTK to NumPy image
     dims = arg.GetDimensions()
     vtk_array = arg.GetPointData().GetScalars()
@@ -50,7 +52,7 @@ class SegmentationTask(QObject):
 
 class SegmentationService(QObject):
   # Signal to emit to perform segmentation
-  execute = pyqtSignal('PyQt_PyObject')
+  execute = pyqtSignal('PyQt_PyObject', 'PyQt_PyObject')
   # Consider argument 
   def __init__(self, parent = None):
     super(SegmentationService, self).__init__(parent)
