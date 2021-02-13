@@ -16,8 +16,6 @@ plt.ion()
 # This is for demonstration only. For the production code, we will do
 # something radically different
 from skimage.segmentation import (morphological_chan_vese,
-                                  morphological_geodesic_active_contour,
-                                  inverse_gaussian_gradient,
                                   checkerboard_level_set)
 
 writer = vtk.vtkMetaImageReader()
@@ -76,6 +74,8 @@ normals.ReleaseDataFlagOn()
 stripper.SetInputConnection(normals.GetOutputPort())
 stripper.ReleaseDataFlagOn()
 stripper.Update()
+
+# Transform polydata using matrix
 
 nextContour = stripper.GetOutput()
 sys.stdout.write('No of points: ')

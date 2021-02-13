@@ -275,8 +275,8 @@ class SmartLock(QMainWindow, ui):
   def onSegClicked(self):
     print("Segmentation")
     showCoordinates = False
-    savePNGImage = False
-    saveMetaImage = False
+    savePNGImage = True
+    saveMetaImage = True
     
     # Both works
     #self.readOnScreenBuffer()
@@ -345,13 +345,10 @@ class SmartLock(QMainWindow, ui):
           sys.stdout.write("%f)" % (coordinate.GetComputedWorldValue(renderer)[2]))
           print("")
 
-    # For VTK version 8.2, we need to add the orientation as a separate parameter
-    self.segServer.execute.emit(self.segImage, self.trans)
-
     if saveMetaImage:
       # Save to disk
       smoother = vtk.vtkImageGaussianSmooth()
-      smoother.SetStandardDeviations(2.0, 2.0)
+      smoother.SetStandardDeviations(3.0, 3.0)
       smoother.SetDimensionality(2)
       smoother.SetInputData(self.segImage)
       smoother.Update()
@@ -360,6 +357,9 @@ class SmartLock(QMainWindow, ui):
       writer.SetFileName('./output.mhd')
       writer.SetInputConnection(smoother.GetOutputPort())
       writer.Write()
+
+    # For VTK version 8.2, we need to add the orientation as a separate parameter
+    self.segServer.execute.emit(self.segImage, self.trans)
 
     
   def onRegClicked(self):
