@@ -14,6 +14,7 @@
 
 import os
 import sys
+from importlib import reload
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -21,7 +22,9 @@ from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
-from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter
+from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter#, QGuiApplication
+
+import numpy as np
 
 from vtkUtils import hexCol, renderLinesAsTubes
 
@@ -30,6 +33,8 @@ ui_file = os.path.join(os.path.dirname(__file__), 'SmartLock3.ui')
 ui, QMainWindow = loadUiType(ui_file)
 
 from Viewer2D import Viewer3D, Viewer2D, Viewer2DStacked
+
+from SegService import SegmentationService
 
 # Initialize this using either CT or US
 class ResliceCallback(object):
@@ -95,6 +100,7 @@ class ResliceCallback(object):
     # Render 3D
     self.IPW[0].GetInteractor().GetRenderWindow().Render()
     if self.syncViews:
+      # Update ultrasound also
       for i in range(2):
         main_window.viewUS[i].viewer.GetResliceCursorWidget().Render()
 
@@ -135,7 +141,8 @@ class SmartLock(QMainWindow, ui):
     super(SmartLock, self).__init__()
     self.setup()
     self.DEFAULT_DIR_KEY = __file__
-
+    self.segServer = SegmentationService(self)
+    
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
     self.stackCT.Initialize()
@@ -183,9 +190,165 @@ class SmartLock(QMainWindow, ui):
     self.cboxPreset.setCurrentIndex(0)
     self.btnSyncCTUS.clicked.connect(lambda: self.onSyncClicked(0))
     self.btnSyncUSCT.clicked.connect(lambda: self.onSyncClicked(1))
+    self.btnReg.clicked.connect(self.onRegClicked)
+    self.btnSeg.clicked.connect(self.onSegClicked)
   def onSyncClicked(self, index):
     if index == 0:
+      # Sync CT to US
       self.cb.syncViews = True
+  def showHideCursor(self, visible=False, target=0):
+    if target == 0:
+      # CT view
+      for iView in range(self.stackCT.count()):
+        for iDim in range(3):
+          prop = self.stackCT.widget(iView).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(iDim)
+          if visible:
+            prop.SetOpacity(1.0)
+          else:
+            prop.SetOpacity(0.0)
+    else:
+      for iView in range(len(self.viewUS)):
+        for iDim in range(3):
+          prop = self.viewUS[iView].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(iDim)
+          if visible:
+            prop.SetOpacity(1.0)
+          else:
+            prop.SetOpacity(0.0)
+
+  def readOnScreenBuffer(self):
+    # Read on-screen buffer
+    renderWindow = self.viewUS[1].viewer.GetRenderWindow()
+    
+    oldSB = renderWindow.GetSwapBuffers()
+    renderWindow.SwapBuffersOff()
+    
+    # Hide cursor
+    self.showHideCursor(False, 1)
+    self.viewUS[1].ShowHideAnnotations(False)
+    # Hide contours
+    self.viewUS[1].ShowHideContours(False)
+    
+    self.windowToImageFilter = vtk.vtkWindowToImageFilter()
+    self.windowToImageFilter.SetInput(renderWindow)
+
+    self.windowToImageFilter.SetScale(1)
+    self.windowToImageFilter.SetInputBufferTypeToRGBA()
+    
+    self.windowToImageFilter.ReadFrontBufferOff()
+    self.windowToImageFilter.Update() # Issues a render on input
+    
+    renderWindow.SetSwapBuffers(oldSB)
+    renderWindow.SwapBuffersOn()
+    #self.segImage = self.windowToImageFilter.GetOutput()
+
+    self.showHideCursor(True, 1)
+    self.viewUS[1].ShowHideAnnotations(True)
+    self.viewUS[1].ShowHideContours(True)
+    
+  def readOffScrenBuffer(self):
+    print("Off-screen")
+    renderWindow = self.viewUS[1].viewer.GetRenderWindow()
+    if not renderWindow.SetUseOffScreenBuffers(True):
+      glRenderWindow.DebugOn()
+      glRenderWindow.SetUseOffScreenBuffers(True)
+      glRenderWindow.DebugOff()
+      print("Unable create a hardware frame buffer, the graphic board or driver can be too old")
+      sys.exit(-1)
+      renderWindow.Render()
+
+    # Hide cursor
+    self.showHideCursor(False, 1)
+    self.viewUS[1].ShowHideAnnotations(False)
+    # Hide contours
+    self.viewUS[1].ShowHideContours(False)
+
+    self.windowToImageFilter = vtk.vtkWindowToImageFilter()
+    self.windowToImageFilter.SetInput(renderWindow)
+    self.windowToImageFilter.Update() # Issues a render call
+  
+    renderWindow.SetUseOffScreenBuffers(False)
+
+    self.showHideCursor(True, 1)
+    self.viewUS[1].ShowHideAnnotations(True)
+    self.viewUS[1].ShowHideContours(True)
+    
+  def onSegClicked(self):
+    print("Segmentation")
+    showCoordinates = False
+    savePNGImage = False
+    saveMetaImage = True
+    
+    # Both works
+    #self.readOnScreenBuffer()
+    self.readOffScrenBuffer()
+    self.segImage = self.windowToImageFilter.GetOutput()
+
+    if savePNGImage:
+      writer = vtk.vtkPNGWriter()
+      writer.SetFileName('./output.png')
+      writer.SetInputData(self.segImage)
+      writer.Write()
+
+    # Compute spacing in world-coordinates
+    renderer = self.viewUS[1].viewer.GetRenderer()      
+    coordinate = vtk.vtkCoordinate()
+    coordinate.SetCoordinateSystemToNormalizedDisplay()
+
+    dims = self.segImage.GetDimensions()
+    coordinate.SetValue(1.0, 0.0)
+    lowerRight = np.array(coordinate.GetComputedWorldValue(renderer))
+    coordinate.SetValue(0.0, 0.0)
+    lowerLeft = np.array(coordinate.GetComputedWorldValue(renderer))
+    coordinate.SetValue(0.0, 1.0)
+    upperLeft = np.array(coordinate.GetComputedWorldValue(renderer))
+    dx = np.sqrt(np.sum((lowerRight - lowerLeft) ** 2)) / dims[0]
+    dy = np.sqrt(np.sum((upperLeft - lowerLeft) ** 2)) / dims[1]
+    self.segImage.SetSpacing(dx,dy,0)
+
+    # Compute direction matrix
+    sliceAxes = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceAxes()
+    orientation = vtk.vtkMatrix3x3()
+    if vtk.VTK_VERSION > '9.0.0':
+      for i in range(3):
+        for j in range(3):
+          orientation.SetElement(i,j,sliceAxes.GetElement(i,j))
+      self.segImage.SetDirectionMatrix(orientation)
+      self.segImage.SetOrigin(lowerLeft)
+      self.segImage.Modified()
+    else:
+      # Compute transformation from x = (1,0,0), y = (0,1,0) to origin and new orientation
+      print('TODO')
+
+    if showCoordinates:
+      for i in range(2):
+        for j in range(2):
+          coordinate.SetValue(float(i), float(j), 0.0)
+          sys.stdout.write("(%d, %d): " % (i,j))
+          sys.stdout.write("(%f, " % (coordinate.GetComputedWorldValue(renderer)[0]))
+          sys.stdout.write("%f, " % (coordinate.GetComputedWorldValue(renderer)[1]))
+          sys.stdout.write("%f)" % (coordinate.GetComputedWorldValue(renderer)[2]))
+          print("")
+
+    # For VTK version 8.2, we need to add the orientation as a separate parameter
+    #self.segServer.execute.emit(self.segImage)
+
+    if saveMetaImage:
+      # Save to disk
+      smoother = vtk.vtkImageGaussianSmooth()
+      smoother.SetStandardDeviations(2.0, 2.0)
+      smoother.SetDimensionality(2)
+      smoother.SetInputData(self.segImage)
+      smoother.Update()
+      
+      writer = vtk.vtkMetaImageWriter()
+      writer.SetFileName('./output.mhd')
+      writer.SetInputConnection(smoother.GetOutputPort())
+      writer.Write()
+
+    
+  def onRegClicked(self):
+    print("Registration")
+    # TODO: Hide cursor, render to back buffer
   def onApplyPresetClicked(self, index):
     window = 200
     level = 100
@@ -225,10 +388,10 @@ class SmartLock(QMainWindow, ui):
         if type(widget) == QSplitter:
             widget.setStyleSheet(""
                                  " QSplitter::handle:horizontal { "
-                                 "    border: 1px outset darkgrey; "
+                                 "    border: 1px outset darkgrey "
                                  " } " 
                                  " QSplitter::handle:vertical{ "
-                                 "    border: 1px outset darkgrey; "
+                                 "    border: 1px outset darkgrey "
                                  " } ")
             widget.setHandleWidth(2) # Default is 3
     # Setup 3D viewer
@@ -304,7 +467,7 @@ class SmartLock(QMainWindow, ui):
     fileName, _ = \
       fileDialog.getOpenFileName(self,
                                  "QFileDialog.getOpenFileName()",
-                                 defaultFile, "All Files (*);;MHD Files (*.mhd);; VTP Files (*.vtp)",
+                                 defaultFile, "All Files (*)MHD Files (*.mhd) VTP Files (*.vtp)",
                                  options=options)
     if fileName:
       # Update default dir
@@ -331,7 +494,7 @@ class SmartLock(QMainWindow, ui):
     connectFilter = vtk.vtkPolyDataConnectivityFilter()
     connectFilter.SetInputConnection(reader.GetOutputPort())
     connectFilter.SetExtractionModeToLargestRegion()
-    connectFilter.Update();
+    connectFilter.Update()
 
     self.vesselPolyData = connectFilter.GetOutput()
 
@@ -392,7 +555,7 @@ class SmartLock(QMainWindow, ui):
     # Update 3D
     self.ResetUSViews()
     self.SetUSResliceMode(1)
-    
+    self.Render()
   def loadFile(self, fileName):
     # Load VTK Meta Image
     reader = vtk.vtkMetaImageReader()
@@ -495,6 +658,9 @@ class SmartLock(QMainWindow, ui):
       self.stackCT.widget(i).viewer.Render()
     # Render 3D
     self.viewer3D.interactor.GetRenderWindow().Render()
+    # Render US
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].viewer.Render()
 
   def SetResliceMode(self, mode):
     # Do we need to render planes if mode == 1?

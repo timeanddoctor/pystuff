@@ -179,7 +179,8 @@ class Viewer2D(QFrame):
     self.edgeActor = None # Actor for contours
     self.iDim = iDim      # Slice dimensions
     self.lastSize = (0,0) # Used for corner button
-    self.buttonWidget = None 
+    self.buttonWidget = None
+    self.cornerAnnotation = None
     layout = QHBoxLayout(self)
     layout.addWidget(interactor)
     layout.setContentsMargins(0, 0, 0, 0)
@@ -247,25 +248,28 @@ class Viewer2D(QFrame):
     renWin = self.viewer.GetRenderWindow()
     renWin.AddObserver('ModifiedEvent', self.resizeCallback)
 
+  def ShowHideAnnotations(self, show=True):
+    if self.cornerAnnotation is not None:
+      self.cornerAnnotation.SetVisibility(show)
   def SetInputData(self, data):
     self.viewer.SetInputData(data)
     # Corner annotation, can use <slice>, <slice_pos>, <window_level>
-    cornerAnnotation = vtk.vtkCornerAnnotation()
-    cornerAnnotation.SetLinearFontScaleFactor(2)
-    cornerAnnotation.SetNonlinearFontScaleFactor(1)
-    cornerAnnotation.SetMaximumFontSize(20)
-    cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
+    self.cornerAnnotation = vtk.vtkCornerAnnotation()
+    self.cornerAnnotation.SetLinearFontScaleFactor(2)
+    self.cornerAnnotation.SetNonlinearFontScaleFactor(1)
+    self.cornerAnnotation.SetMaximumFontSize(20)
+    self.cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
                                                                  0:'Sagittal',
                                                                  1:'Coronal'}[self.iDim])
-    prop = cornerAnnotation.GetTextProperty()
+    prop = self.cornerAnnotation.GetTextProperty()
     prop.BoldOn()
     color = deque((1,0,0))
     color.rotate(self.iDim)
-    cornerAnnotation.GetTextProperty().SetColor(tuple(color))
-    cornerAnnotation.SetImageActor(self.viewer.GetImageActor())
+    self.cornerAnnotation.GetTextProperty().SetColor(tuple(color))
+    self.cornerAnnotation.SetImageActor(self.viewer.GetImageActor())
     
-    cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
-    self.viewer.GetRenderer().AddViewProp(cornerAnnotation)
+    self.cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
+    self.viewer.GetRenderer().AddViewProp(self.cornerAnnotation)
 
   def InitializeContour(self, data, color=yellow):
     # Update contours
@@ -295,7 +299,7 @@ class Viewer2D(QFrame):
     self.edgeActor.SetMapper(edgeMapper)
     prop = self.edgeActor.GetProperty()
     renderLinesAsTubes(prop)
-    prop.SetColor(yellow) # If Scalars are extracted - they turn green
+    prop.SetColor(color) # If Scalars are extracted - they turn green
 
     # Move in front of image
     transform = vtk.vtkTransform()
@@ -305,6 +309,9 @@ class Viewer2D(QFrame):
     # Add actor to renderer
     self.viewer.GetRenderer().AddViewProp(self.edgeActor)
 
+  def ShowHideContours(self, show):
+    if self.edgeActor is not None:
+      self.edgeActor.SetVisibility(show)
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
 
@@ -334,7 +341,6 @@ class Viewer2DStacked(QStackedWidget):
   def __init__(self, parent=None, axes=[0,1,2]):
     super(Viewer2DStacked, self).__init__(parent)
     # Create signal
-    print(axes)
     #planesModified = pyEvent()
     for i in range(len(axes)):
       widget = Viewer2D(self, axes[i])

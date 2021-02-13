@@ -11,6 +11,59 @@ can result in a lot of pixels being drawn when the entire mesh is
 shown, so use this power judiciously.
 """
 
+def numpyTypeToVTKType(dtype):
+  if dtype == np.int8:
+    #define VTK_CHAR            2
+    return 2
+  elif dtype == np.uint8:
+    #define VTK_UNSIGNED_CHAR   3
+    return 3
+  elif dtype == np.int16:
+    #define VTK_SHORT           4
+    return 4
+  elif dtype == np.uint16:
+    #define VTK_UNSIGNED_SHORT  5
+    return 5
+  elif dtype == np.int32:
+    #define VTK_INT             6
+    return 6
+  elif dtype == np.uint32:
+    #define VTK_UNSIGNED_INT    7
+    return 7
+  elif dtype == np.int64:
+    #define VTK_LONG            8
+    return 8
+  elif dtype == np.uint64:
+    #define VTK_UNSIGNED_LONG   9
+    return 9
+  elif dtype == np.float32:
+    #define VTK_FLOAT          10
+    return 10
+  elif dtype == np.float64:
+    #define VTK_DOUBLE         11
+    return 11
+  else:
+    raise RuntimeError("type conversion not implemented...")
+
+def toVtkImageData(a):    
+  importer = vtk.vtkImageImport()
+
+  #FIXME
+  #In all cases I have seen, it is needed to reverse the shape here
+  #Does that hold universally, and do we understand why?
+  reverseShape = True
+   
+  importer.SetDataScalarType(numpyTypeToVTKType(a.dtype))
+  if reverseShape:
+    importer.SetDataExtent(0,a.shape[2]-1,0,a.shape[1]-1,0,a.shape[0]-1)
+    importer.SetWholeExtent(0,a.shape[2]-1,0,a.shape[1]-1,0,a.shape[0]-1)
+  else:
+    importer.SetDataExtent(0,a.shape[0]-1,0,a.shape[1]-1,0,a.shape[2]-1)
+    importer.SetWholeExtent(0,a.shape[0]-1,0,a.shape[1]-1,0,a.shape[2]-1)
+  importer.SetImportVoidPointer(a)
+  importer.Update()
+  return importer.GetOutput()
+  
 def hexCol(s):
   if isinstance(s,str):
     if "#" in s:
