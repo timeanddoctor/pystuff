@@ -9,64 +9,133 @@ from skimage.segmentation import (morphological_chan_vese,
                                   checkerboard_level_set)
 
 class SegmentationTask(QObject):
-  done = pyqtSignal()
+  done = pyqtSignal('PyQt_PyObject')
   def __init__(self, parent = None):
     super().__init__(parent)
 
   @pyqtSlot('PyQt_PyObject', 'PyQt_PyObject')    
   def execute(self, arg, trans):
-    saveToDisk = False
+    # Number of Chan-Vese iterations
+    nIter = 8
+    std = 1.0 # [mm]
+    saveMetaImage = False
+    savePNGImage = False
     # Actual work - now done using SciPy
-    print("running")
 
+    # Gaussian smoothing
+    sx, sy, sz = arg.GetSpacing()
+    sx, sy = std / sx, std / sy
+    print(sx)
+    print(sy)
     smoother = vtk.vtkImageGaussianSmooth()
-    smoother.SetStandardDeviations(2.0, 2.0)
+    smoother.SetStandardDeviations(sx, sy)
     smoother.SetDimensionality(2)
     smoother.SetInputData(arg)
     smoother.Update()
 
-    if saveToDisk:
+    if savePNGImage:
+      writer = vtk.vtkPNGWriter()
+      writer.SetFileName('./output.png')
+      writer.SetInputConnection(smoother.GetOutputPort())
+      writer.Write()
+    
+    if saveMetaImage:
       # Save to disk
       writer = vtk.vtkMetaImageWriter()
       writer.SetFileName('./output.mhd')
       writer.SetInputConnection(smoother.GetOutputPort())
       writer.Write()
 
-    return
+    smoothedData = smoother.GetOutput()
+    
     # Convert VTK to NumPy image
     dims = arg.GetDimensions()
-    vtk_array = arg.GetPointData().GetScalars()
+    vtk_array = smoothedData.GetPointData().GetScalars()
     nComponents = vtk_array.GetNumberOfComponents()
-    temp = vtk_to_numpy(vtk_array).reshape(dims[2], dims[1], dims[0], nComponents)
-    npData = temp[:,:,:,0].reshape(dims[1], dims[0])
+    npData = vtk_to_numpy(vtk_array).reshape(dims[2], dims[1], dims[0], nComponents)[:,:,:,0].reshape(dims[1], dims[0])
 
-    # Segment using SciPy
-    init_ls = checkerboard_level_set(npData.shape, 6) # was 6
-    contours0 = morphological_chan_vese(npData, 8, init_level_set=init_ls, smoothing=2)
-    data = 255*contours0[None,:]
-    #vtkData = toVtkImageData(data)
+    # Seed for active contours
+    init_ls = checkerboard_level_set(npData.shape, 6)
 
+    contours = morphological_chan_vese(npData, nIter,
+                                       init_level_set=init_ls, smoothing=2)
+    # Add singleton to get 3-dimensional data
+    data = contours[None, :]
+
+    # Convert Numpy to VTK data
+    importer = vtk.vtkImageImport()
+    importer.SetDataScalarType(vtk.VTK_SIGNED_CHAR)
+    importer.SetDataExtent(0,data.shape[2]-1,
+                           0,data.shape[1]-1,
+                           0,data.shape[0]-1)
+    importer.SetWholeExtent(0,data.shape[2]-1,
+                            0,data.shape[1]-1,
+                            0,data.shape[0]-1)
+    importer.SetImportVoidPointer(data.data)
+    importer.Update()
+    vtkData = importer.GetOutput()
+    vtkData.SetSpacing(smoothedData.GetSpacing())
+    vtkData.SetOrigin(0,0,0)
     
+    # Contour filter
+    contourFilter = vtk.vtkContourFilter()
+    iso_value = 0.5
+    contourFilter.SetInputData(vtkData)
+    contourFilter.SetValue(0, iso_value)
+    contourFilter.Update()
+    contourFilter.ReleaseDataFlagOn()
+
+    # Compute normals
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputConnection(contourFilter.GetOutputPort())
+    normals.SetFeatureAngle(60.0)
+    normals.ReleaseDataFlagOn()
+
+    # Join line segments
+    stripper = vtk.vtkStripper()
+    stripper.SetInputConnection(normals.GetOutputPort())
+    stripper.ReleaseDataFlagOn()
+    stripper.Update()
+
+
+    # Transform data from scaled screen to world coordinates
+    transform = vtk.vtkTransform()
+    transform.SetMatrix(trans)
+    transformFilter = vtk.vtkTransformPolyDataFilter()
+    transformFilter.SetInputConnection(stripper.GetOutputPort())
+    transformFilter.SetTransform(transform)
+    transformFilter.Update()
+    result = transformFilter.GetOutput()
     
-    self.done.emit()
+    # Emit done with output
+    self.done.emit(result)
 
 class SegmentationService(QObject):
   # Signal to emit to perform segmentation
   execute = pyqtSignal('PyQt_PyObject', 'PyQt_PyObject')
-  # Consider argument 
+
+  # Signal emitted when segmentation is ready
+  ready = pyqtSignal('PyQt_PyObject')
+
   def __init__(self, parent = None):
     super(SegmentationService, self).__init__(parent)
     self.workerThread = QThread(self)
     self.worker = SegmentationTask()
     self.worker.moveToThread(self.workerThread)
     self.execute.connect(self.worker.execute)
+    self.worker.done.connect(self.workerDone)
     self.workerThread.finished.connect(self.worker.deleteLater)
     self.workerThread.start()
     if parent is not None:
         parent.destroyed.connect(self.cleanUp)
+
+  @pyqtSlot('PyQt_PyObject')
+  def workerDone(self,arg):
+    # Worker attaches to this slot
+    self.ready.emit(arg)
+        
   def cleanUp(self):
     # TODO: Call this when parent is destroyed
-    print("clean up")
     self.worker.deleteLater()
     self.worker = None
     self.workerThread.quit()

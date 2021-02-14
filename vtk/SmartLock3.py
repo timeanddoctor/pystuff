@@ -21,7 +21,7 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
-from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect
+from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect, pyqtSlot
 from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter#, QGuiApplication
 
 import numpy as np
@@ -142,6 +142,7 @@ class SmartLock(QMainWindow, ui):
     self.setup()
     self.DEFAULT_DIR_KEY = __file__
     self.segServer = SegmentationService(self)
+    self.usActor = None
     
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -239,7 +240,6 @@ class SmartLock(QMainWindow, ui):
     
     renderWindow.SetSwapBuffers(oldSB)
     renderWindow.SwapBuffersOn()
-    #self.segImage = self.windowToImageFilter.GetOutput()
 
     self.showHideCursor(True, 1)
     self.viewUS[1].ShowHideAnnotations(True)
@@ -274,14 +274,16 @@ class SmartLock(QMainWindow, ui):
     
   def onSegClicked(self):
     print("Segmentation")
-    showCoordinates = False
-    savePNGImage = True
-    saveMetaImage = True
+    showCoordinates = True
+    savePNGImage = False
+    saveMetaImage = False
     
     # Both works
-    #self.readOnScreenBuffer()
-    self.readOffScrenBuffer()
+    self.readOnScreenBuffer()
+    #self.readOffScrenBuffer()
     self.segImage = self.windowToImageFilter.GetOutput()
+    print(self.segImage)
+    self.segImage.SetOrigin(0,0,0)
 
     if savePNGImage:
       writer = vtk.vtkPNGWriter()
@@ -303,25 +305,29 @@ class SmartLock(QMainWindow, ui):
     upperLeft = np.array(coordinate.GetComputedWorldValue(renderer))
     dx = np.sqrt(np.sum((lowerRight - lowerLeft) ** 2)) / dims[0]
     dy = np.sqrt(np.sum((upperLeft - lowerLeft) ** 2)) / dims[1]
-    self.segImage.SetSpacing(dx,dy,0)
-
+    self.segImage.SetSpacing(dx,dy,0.0)
+    self.segImage.Modified()
+    #print('segImage stats:')
+    #print(self.segImage)
+    
     self.trans = vtk.vtkMatrix4x4()
     
-    # Compute direction matrix
-    sliceAxes = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceAxes()
-    orientation = vtk.vtkMatrix3x3()
     if vtk.VTK_VERSION > '9.0.0':
+      # Compute direction matrix
+      sliceAxes = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceAxes()
+      orientation = vtk.vtkMatrix3x3()
       for i in range(3):
         for j in range(3):
           orientation.SetElement(i,j,sliceAxes.GetElement(i,j))
       self.segImage.SetDirectionMatrix(orientation)
       self.segImage.SetOrigin(lowerLeft)
       self.segImage.Modified()
+
     else:
       # Compute transformation from x = (1,0,0), y = (0,1,0) to origin and new orientation
-      normal0 = (0,0,1)
-      first0 = (1,0,0)
-      origin0 = (0,0,0)
+      normal0 = (0.0,0.0,1.0)
+      first0 =  (1.0,0.0,0.0)
+      origin0 = (0.0,0.0,0.0)
       
       origin1 = lowerLeft
       first1 = lowerRight - lowerLeft
@@ -336,6 +342,9 @@ class SmartLock(QMainWindow, ui):
                                    normal1, first1, origin1)
 
     if showCoordinates:
+      # Center of plane
+      origin = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
+      print(origin)
       for i in range(2):
         for j in range(2):
           coordinate.SetValue(float(i), float(j), 0.0)
@@ -345,26 +354,65 @@ class SmartLock(QMainWindow, ui):
           sys.stdout.write("%f)" % (coordinate.GetComputedWorldValue(renderer)[2]))
           print("")
 
-    if saveMetaImage:
-      # Save to disk
-      smoother = vtk.vtkImageGaussianSmooth()
-      smoother.SetStandardDeviations(3.0, 3.0)
-      smoother.SetDimensionality(2)
-      smoother.SetInputData(self.segImage)
-      smoother.Update()
-      
-      writer = vtk.vtkMetaImageWriter()
-      writer.SetFileName('./output.mhd')
-      writer.SetInputConnection(smoother.GetOutputPort())
-      writer.Write()
-
     # For VTK version 8.2, we need to add the orientation as a separate parameter
+    self.segServer.ready.connect(self.updateSegmentation)
     self.segServer.execute.emit(self.segImage, self.trans)
 
+  @pyqtSlot('PyQt_PyObject')
+  def updateSegmentation(self, contours):
+    self.lastUSContours = contours
+    # Display contours in 3D
+    #print("display contours")
+    tubes = vtk.vtkTubeFilter()
+    tubes.SetInputData(self.lastUSContours)
+    tubes.CappingOn()
+    tubes.SidesShareVerticesOff()
+    tubes.SetNumberOfSides(12)
+    tubes.SetRadius(2.0)
+
+    edgeMapper = vtk.vtkPolyDataMapper()
+    edgeMapper.ScalarVisibilityOff()
+    edgeMapper.SetInputConnection(tubes.GetOutputPort())
+
+    if self.usActor is not None:
+      self.viewer3D.interactor.Disable()
+      self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usActor)
+      self.viewer3D.interactor.Enable()
     
+    self.usActor = vtk.vtkActor()
+    self.usActor.SetMapper(edgeMapper)
+    prop = self.usActor.GetProperty()
+    #renderLinesAsTubes(prop)
+    prop.SetColor(red)
+    prop.SetLineWidth(3)
+    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usActor)
+    self.Render()
+
   def onRegClicked(self):
     print("Registration")
-    # TODO: Hide cursor, render to back buffer
+    # covert center to world coordinate and draw vtkSphereSource in 3D
+    coordinate = vtk.vtkCoordinate()
+    coordinate.SetCoordinateSystemToNormalizedDisplay()
+    coordinate.SetValue(.5,.5)
+    renderer = self.viewUS[1].viewer.GetRenderer()      
+    center = np.array(coordinate.GetComputedWorldValue(renderer))
+    sphere = vtk.vtkSphereSource()
+    sphere.SetCenter(center)
+    sphere.SetRadius(10.0)
+    sphere.SetPhiResolution(100)
+    sphere.SetThetaResolution(100)
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(sphere.GetOutputPort())
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetColor(red)
+
+    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(actor)
+    self.Render()
+    
+    
   def onApplyPresetClicked(self, index):
     window = 200
     level = 100
