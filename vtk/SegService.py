@@ -97,13 +97,10 @@ class SegmentationTask(QObject):
     stripper.ReleaseDataFlagOn()
     stripper.Update()
 
-
     # Transform data from scaled screen to world coordinates
-    transform = vtk.vtkTransform()
-    transform.SetMatrix(trans)
     transformFilter = vtk.vtkTransformPolyDataFilter()
     transformFilter.SetInputConnection(stripper.GetOutputPort())
-    transformFilter.SetTransform(transform)
+    transformFilter.SetTransform(trans)
     transformFilter.Update()
     result = transformFilter.GetOutput()
     

@@ -8,9 +8,10 @@
 #       Coordinates
 #       Grap US image
 #       Run segmentation
-# Fri
-#       Transform plane (correction), slice and back
-#       Introduce offset
+
+# 1. Get axes and perform reslice yourself. Get 3D coordinate of resliced point
+# 2. Adjust with distance to screen (distance to plane) (Works)
+# 3. Picker (only with zoom)
 
 import os
 import sys
@@ -298,49 +299,64 @@ class SmartLock(QMainWindow, ui):
 
     dims = self.segImage.GetDimensions()
     coordinate.SetValue(1.0, 0.0)
-    lowerRight = np.array(coordinate.GetComputedWorldValue(renderer))
+    lowerRight0 = coordinate.GetComputedWorldValue(renderer)
+    lowerRight = np.array(lowerRight0)
     coordinate.SetValue(0.0, 0.0)
-    lowerLeft = np.array(coordinate.GetComputedWorldValue(renderer))
+    lowerLeft0 = coordinate.GetComputedWorldValue(renderer)
+    lowerLeft = np.array(lowerLeft0)
     coordinate.SetValue(0.0, 1.0)
-    upperLeft = np.array(coordinate.GetComputedWorldValue(renderer))
+    upperLeft0 = coordinate.GetComputedWorldValue(renderer)
+    upperLeft = np.array(upperLeft0)
     dx = np.sqrt(np.sum((lowerRight - lowerLeft) ** 2)) / dims[0]
     dy = np.sqrt(np.sum((upperLeft - lowerLeft) ** 2)) / dims[1]
     self.segImage.SetSpacing(dx,dy,0.0)
     self.segImage.Modified()
+
     #print('segImage stats:')
     #print(self.segImage)
+
+    # Check distance to plane
+    cursor = self.viewUS[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
+    corners = [upperLeft0, lowerLeft0, lowerRight0]
+    normal = cursor.GetPlane(2).GetNormal()
+    origin = cursor.GetPlane(2).GetOrigin()
+    PQ = vtk.vtkVector3d()
+    dist = 0.0
+    for i in range(len(corners)):
+      # Compute distance to plane
+      vtk.vtkMath.Subtract(origin, corners[i], PQ)
+      dist = vtk.vtkMath.Dot(normal, PQ)
+      print(dist)
+
+    self.trans = vtk.vtkTransform()
     
-    self.trans = vtk.vtkMatrix4x4()
+    # Compute transformation from x = (1,0,0), y = (0,1,0) to origin and new orientation
+    normal0 = (0.0,0.0,1.0)
+    first0 =  (1.0,0.0,0.0)
+    origin0 = (0.0,0.0,0.0)
     
-    if vtk.VTK_VERSION > '9.0.0':
-      # Compute direction matrix
-      sliceAxes = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceAxes()
-      orientation = vtk.vtkMatrix3x3()
-      for i in range(3):
-        for j in range(3):
-          orientation.SetElement(i,j,sliceAxes.GetElement(i,j))
-      self.segImage.SetDirectionMatrix(orientation)
-      self.segImage.SetOrigin(lowerLeft)
-      self.segImage.Modified()
+    origin1 = lowerLeft
+    first1 = lowerRight - lowerLeft
+    second1 = upperLeft - lowerLeft
 
-    else:
-      # Compute transformation from x = (1,0,0), y = (0,1,0) to origin and new orientation
-      normal0 = (0.0,0.0,1.0)
-      first0 =  (1.0,0.0,0.0)
-      origin0 = (0.0,0.0,0.0)
+    normal1 = np.cross(first1, second1)
+    normal1 = normal1 / np.sqrt(np.sum(normal1**2))
+    
+    first1 = first1 / np.sqrt(np.sum(first1**2))
+
+    transMat = AxesToTransform(normal0, first0, origin0,
+                               normal1, first1, origin1)
+
+    self.trans = vtk.vtkTransform()
+    self.trans.SetMatrix(transMat)
+
+    # Distance from screen to data
+    offsetX = dist*normal[0]
+    offsetY = dist*normal[1]
+    offsetZ = dist*normal[2]
+    self.trans.PostMultiply()
+    self.trans.Translate(offsetX, offsetY, offsetZ)
       
-      origin1 = lowerLeft
-      first1 = lowerRight - lowerLeft
-      second1 = upperLeft - lowerLeft
-
-      normal1 = np.cross(first1, second1)
-      normal1 = normal1 / np.sqrt(np.sum(normal1**2))
-      
-      first1 = first1 / np.sqrt(np.sum(first1**2))
-
-      self.trans = AxesToTransform(normal0, first0, origin0,
-                                   normal1, first1, origin1)
-
     if showCoordinates:
       # Center of plane
       origin = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
