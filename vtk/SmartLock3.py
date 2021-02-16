@@ -22,7 +22,7 @@ from importlib import reload
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from vtk.util.colors import red, yellow
+from vtk.util.colors import red, pink, yellow
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt,\
@@ -40,6 +40,15 @@ from Viewer2D import Viewer2D, Viewer2DStacked
 from Viewer3D import Viewer3D
 
 from SegService import SegmentationService
+
+def enum(*sequential, **named):
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    reverse = dict((value, key) for key, value in enums.items())
+    enums['reverse_mapping'] = reverse
+    return type('Enum', (), enums)
+  
+direction = enum('UP','DOWN','LEFT','RIGHT')
+azel = enum('AZ','EL')
 
 # Initialize this using either CT or US
 class ResliceCallback(object):
@@ -69,7 +78,7 @@ class ResliceCallback(object):
           main_window.viewUS[i].UpdateContours()
         # TODO: Handle no US and update plane widget (see C++)
       # Update 3D widget
-      for i in range(3):
+      for i in range(len(self.IPW)):
         # Only needed for the actual plane (TODO: Optimize)
         pda = self.IPW[i].GetPolyDataAlgorithm()
         ps = self.RCW[i].GetResliceCursorRepresentation().GetPlaneSource()
@@ -121,9 +130,10 @@ class ResliceCallbackUS(object):
     self.render() # TODO: Consider partly rendering
 
   def onEndWindowLevelChanged(self, caller, ev):
-    wl = [main_window.viewUS[0].viewer.GetColorWindow(), main_window.viewUS[0].viewer.GetColorLevel()]
-    main_window.viewUS[0].viewer.SetColorWindow(wl[0])
-    main_window.viewUS[0].viewer.SetColorLevel(wl[1])
+    viewer = main_window.viewUS[0].viewer
+    wl = [viewer.GetColorWindow(), viewer.GetColorLevel()]
+    viewer.SetColorWindow(wl[0])
+    viewer.SetColorLevel(wl[1])
     return
 
   def onWindowLevelChanged(self, caller, ev):
@@ -155,6 +165,13 @@ class SmartLock(QMainWindow, ui):
 
     self.misAlignment = vtk.vtkTransform()
     self.misAlignment.Identity()
+
+  def onArrowsClicked(self, _view, _direction):
+    if _view == azel.AZ:
+      if (_direction == direction.RIGHT):
+        print('hello')
+        # Modify transformation
+        # Update contours
     
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -205,7 +222,7 @@ class SmartLock(QMainWindow, ui):
     self.btnSyncUSCT.clicked.connect(lambda: self.onSyncClicked(1))
     self.btnReg.clicked.connect(self.onRegClicked)
     self.btnSeg.clicked.connect(self.onSegClicked)
-
+    self.btnRightAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.RIGHT))
   def onSyncClicked(self, index):
     if index == 0:
       # Sync CT to US
@@ -461,7 +478,7 @@ class SmartLock(QMainWindow, ui):
     
     # TODO: Make this work if read before US
     for i in range(self.stackCT.count()):
-      self.stackCT.widget(i).InitializeContours(self.appendFilter,color=red)
+      self.stackCT.widget(i).InitializeContours(self.appendFilter,color=pink)
     for i in range(len(self.viewUS)):
       self.viewUS[i].InitializeContours(self.appendFilter)
 

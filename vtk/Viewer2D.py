@@ -64,7 +64,15 @@ class Viewer2D(QFrame):
     self.overlay.SetMapper(mapper)
     prop = self.overlay.GetProperty()
     renderLinesAsTubes(prop)
-    prop.SetColor(yellow)
+    prop.SetColor(red)
+
+    RCW = self.viewer.GetResliceCursorWidget()    
+    ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+    normal = ps.GetNormal()
+    transform = vtk.vtkTransform()
+    transform.Translate(1.1*normal[0], 1.1*normal[1], 1.1*normal[2])
+    self.overlay.SetUserTransform(transform)
+
     self.viewer.GetRenderer().AddActor(self.overlay)
     self.viewer.GetRenderWindow().GetInteractor().Enable()
   def RemoveOverlay(self):
