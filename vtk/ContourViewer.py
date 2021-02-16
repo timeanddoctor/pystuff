@@ -8,8 +8,11 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
-from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect, QObject
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame, QSpacerItem, QSizePolicy, QPushButton
+from PyQt5.QtCore import Qt, QObject, QCoreApplication,\
+  QSettings, QFileInfo
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout,\
+  QSplitter, QFrame, QSpacerItem, QPushButton,\
+  QAction, QFileDialog, QApplication,  QSizePolicy
 
 ui_file = os.path.join(os.path.dirname(__file__), 'ContourViewer.ui')
 
@@ -54,15 +57,19 @@ class ResliceCallback(object):
         main_window.vtk_widgets[i].UpdateContour()
     self.render()
   def onEndWindowLevelChanged(self, caller, ev):
-    wl = [main_window.vtk_widgets[0].viewer.GetColorWindow(), main_window.vtk_widgets[0].viewer.GetColorLevel()]
-    main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
-    main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
+    # Colormap is shared, so use widget 0
+    viewer = main_window.vtk_widgets[0].viewer
+    wl = [viewer.GetColorWindow(),
+          viewer.GetColorLevel()]
+    viewer.SetColorWindow(wl[0])
+    viewer.SetColorLevel(wl[1])
     return
 
   def onWindowLevelChanged(self, caller, ev):
     if (caller.GetClassName() == 'vtkImagePlaneWidget'):
       wl = [caller.GetWindow(), caller.GetLevel()]
-      # Triggers an update of vtkImageMapToWindowLevelColors - updates annotations
+      # Triggers an update of vtkImageMapToWindowLevelColors
+      # - updates annotations
       main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
       main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
     self.render()
@@ -92,7 +99,9 @@ class FourPaneViewer(QMainWindow, ui):
     fileName, _ = \
       fileDialog.getOpenFileName(self,
                                  "QFileDialog.getOpenFileName()",
-                                 "", "All Files (*);;MHD Files (*.mhd);; VTP Files (*.vtp)",
+                                 "", "All Files (*);"
+                                 ";MHD Files (*.mhd);"
+                                 "; VTP Files (*.vtp)",
                                  options=options)
     if fileName:
       # Update default dir
@@ -387,11 +396,11 @@ class FourPaneViewer(QMainWindow, ui):
       self.cb.RCW.append(self.vtk_widgets[i].viewer.GetResliceCursorWidget())
 
     for i in range(3):
-      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, self.cb.onResliceAxesChanged)
-      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
-      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
-      self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
-      # self.vtk_widgets[i].viewer.GetResliceCursorWidget().AddObserver('EndInteractionEvent', self.cb.Render)
+      rcw = self.vtk_widgets[i].viewer.GetResliceCursorWidget()
+      rcw.AddObserver(vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent, self.cb.onResliceAxesChanged)
+      rcw.AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
+      rcw.AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
+      rcw.AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
       # Ignored after loading data (why)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
@@ -400,8 +409,10 @@ class FourPaneViewer(QMainWindow, ui):
       # Make them all share the same color map.
       self.vtk_widgets[i].viewer.SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
-      self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput())
-      self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
+      self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().\
+                                                     GetResliceCursorRepresentation().GetColorMap().GetInput())
+      self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().\
+                                      GetResliceCursorRepresentation().GetColorMap())
 
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -447,9 +458,10 @@ class Viewer2D(QFrame):
     cornerAnnotation.SetLinearFontScaleFactor(2)
     cornerAnnotation.SetNonlinearFontScaleFactor(1)
     cornerAnnotation.SetMaximumFontSize(20)
-    cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
-                                                                 0:'Sagittal',
-                                                                 1:'Coronal'}[self.iDim])
+    cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,
+                             {2:'Axial',
+                              0:'Sagittal',
+                              1:'Coronal'}[self.iDim])
     prop = cornerAnnotation.GetTextProperty()
     prop.BoldOn()
     color = deque((1,0,0))

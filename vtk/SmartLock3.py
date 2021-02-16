@@ -27,7 +27,8 @@ from vtk.util.colors import red, yellow
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt,\
   QSettings, QFileInfo, QRect, pyqtSlot
-from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter
+from PyQt5.QtWidgets import QFileDialog, QApplication,\
+  QAction, QCommonStyle, QStyle, QSplitter
 
 from vtkUtils import hexCol, renderLinesAsTubes, AxesToTransform
 
@@ -65,10 +66,8 @@ class ResliceCallback(object):
               target = main_window.viewUS[i-1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
               target.SetCenter(cursor.GetCenter())
         for i in range(2):
-          main_window.viewUS[i].UpdateContour()
+          main_window.viewUS[i].UpdateContours()
         # TODO: Handle no US and update plane widget (see C++)
-          
-        
       # Update 3D widget
       for i in range(3):
         # Only needed for the actual plane (TODO: Optimize)
@@ -80,9 +79,9 @@ class ResliceCallback(object):
         pda.SetPoint2(ps.GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
-        main_window.stackCT.widget(i).UpdateContour()
-        
+        main_window.stackCT.widget(i).UpdateContours()
     self.render() # TODO: Consider partly rendering
+
   def onEndWindowLevelChanged(self, caller, ev):
     wl = [main_window.stackCT.widget(0).viewer.GetColorWindow(), main_window.stackCT.widget(0).viewer.GetColorLevel()]
     main_window.stackCT.widget(0).viewer.SetColorWindow(wl[0])
@@ -112,14 +111,15 @@ class ResliceCallbackUS(object):
   def __init__(self):
     self.RCW = None
     self.syncViews = False
+
   def onResliceAxesChanged(self, caller, ev):
     if (caller.GetClassName() == 'vtkResliceCursorWidget'):
       rep = caller.GetRepresentation()
       rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
       for i in range(2):
-        main_window.viewUS[i].UpdateContour()
-        
+        main_window.viewUS[i].UpdateContours()
     self.render() # TODO: Consider partly rendering
+
   def onEndWindowLevelChanged(self, caller, ev):
     wl = [main_window.viewUS[0].viewer.GetColorWindow(), main_window.viewUS[0].viewer.GetColorLevel()]
     main_window.viewUS[0].viewer.SetColorWindow(wl[0])
@@ -138,7 +138,6 @@ class ResliceCallbackUS(object):
     # Render views
     for i in range(2):
       self.RCW[i].Render()
-
     
 class SmartLock(QMainWindow, ui):
   def __init__(self):
@@ -146,13 +145,16 @@ class SmartLock(QMainWindow, ui):
     self.setup()
     self.DEFAULT_DIR_KEY = __file__
     self.segServer = SegmentationService(self)
-    self.usActor = None
+    self.usActor = None # Used for overlay
 
     # Update this when load interior and exterior
     self.CTContours = None
 
     # Append all surfaces to this
     self.appendFilter = vtk.vtkAppendPolyData()
+
+    self.misAlignment = vtk.vtkTransform()
+    self.misAlignment.Identity()
     
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -203,6 +205,7 @@ class SmartLock(QMainWindow, ui):
     self.btnSyncUSCT.clicked.connect(lambda: self.onSyncClicked(1))
     self.btnReg.clicked.connect(self.onRegClicked)
     self.btnSeg.clicked.connect(self.onSegClicked)
+
   def onSyncClicked(self, index):
     if index == 0:
       # Sync CT to US
@@ -248,7 +251,6 @@ class SmartLock(QMainWindow, ui):
     # Issue segmentation
     self.segServer.execute.emit(self.segImage, self.trans)
 
-    #GetWindowSlicePlaneCoordinates
   @pyqtSlot('PyQt_PyObject')
   def updateSegmentation(self, contours):
     self.lastUSContours = contours
@@ -329,12 +331,12 @@ class SmartLock(QMainWindow, ui):
     self.viewer3D = Viewer3D(self)
     self.viewer3D.AddPlaneCornerButtons()
 
-    self.layout3D.setContentsMargins(0,0,0,0)
+    self.layout3D.setContentsMargins(0, 0, 0, 0)
     self.layout3D.addWidget(self.viewer3D)
 
     # Setup CT viewer
     self.stackCT = Viewer2DStacked(self)
-    self.layoutCT.setContentsMargins(0,0,0,0)
+    self.layoutCT.setContentsMargins(0, 0, 0, 0)
     self.layoutCT.insertWidget(0,self.stackCT)
 
     # Setup US views
@@ -409,13 +411,13 @@ class SmartLock(QMainWindow, ui):
         # Load data
         self.loadFile(fileName)
       elif (info.completeSuffix() == "vtp") and fileType == 1:
-        self.loadSurface(fileName, contours=True)
+        self.loadSurface(fileName, contours=True, index=0)
       elif (info.completeSuffix() == "vtp") and fileType == 2:
-        self.loadSurface(fileName, contours=False)
+        self.loadSurface(fileName, contours=False, index=1)
       elif (info.completeSuffix() == "mhd") and fileType == 3:
         self.loadUSFile(fileName)
 
-  def loadSurface(self, fileName, contours=True):
+  def loadSurface(self, fileName, index=0):
     reader = vtk.vtkXMLPolyDataReader()
     reader.SetFileName(fileName)
     reader.Update()
@@ -426,41 +428,43 @@ class SmartLock(QMainWindow, ui):
     connectFilter.SetExtractionModeToLargestRegion()
     connectFilter.Update()
 
-    vesselPolyData = connectFilter.GetOutput()
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputConnection(connectFilter.GetOutputPort())
 
-    
-    
-    self.appendFilter.AddInputData(vesselPolyData)
-    self.appendFilter.Update()
-    
-    # Disable interactor, remove actors, normals, initialize contours,
-    
-    # Compute normals
-    self.vesselNormals = vtk.vtkPolyDataNormals()
-    self.vesselNormals.SetInputData(vesselPolyData)
+    # 3D viewer
 
     # Mapper
     mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(self.vesselNormals.GetOutputPort())
+    mapper.SetInputConnection(normals.GetOutputPort())
 
     # Actor for vessels
-    self.vessels = vtk.vtkActor()
-    self.vessels.SetMapper(mapper)
-    prop = self.vessels.GetProperty()
-    prop.SetColor(vtk.vtkColor3d(hexCol("#517487"))) # 25% lighter
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    prop = actor.GetProperty()
 
+    if index == 0:
+      # Veins
+      prop.SetColor(vtk.vtkColor3d(hexCol("#517487"))) # 25% lighter
+    else:
+      # Liver
+      prop.SetColor(vtk.vtkColor3d(hexCol("#873927")))
+      
     # Assign actor to the renderer
     prop.SetOpacity(0.35)
-    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.vessels)
-
-
+    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(actor)
+    
+    # 2D Views
+    polyData = normals.GetOutput()
+    
+    self.appendFilter.AddInputData(polyData)
+    self.appendFilter.Update()
     
     # TODO: Make this work if read before US
-    if contours:
-      for i in range(self.stackCT.count()):
-        self.stackCT.widget(i).InitializeContour(self.vesselNormals,color=red)
-      for i in range(len(self.viewUS)):
-        self.viewUS[i].InitializeContour(self.vesselNormals)
+    for i in range(self.stackCT.count()):
+      self.stackCT.widget(i).InitializeContours(self.appendFilter,color=red)
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].InitializeContours(self.appendFilter)
+
     self.Render()
 
   def loadUSFile(self, fileName):
@@ -641,8 +645,8 @@ if __name__ == '__main__':
     
     main_window.loadFile(os.path.join(fileDir,defaultFile[0]))
     main_window.loadUSFile(os.path.join(fileDir,defaultFile[3]))
-    main_window.loadSurface(os.path.join(fileDir,defaultFile[1]),True) 
-    main_window.loadSurface(os.path.join(fileDir,defaultFile[2]),False) 
+    main_window.loadSurface(os.path.join(fileDir,defaultFile[1]),0) 
+    main_window.loadSurface(os.path.join(fileDir,defaultFile[2]),1) 
   
   sys.exit(app.exec_())
 

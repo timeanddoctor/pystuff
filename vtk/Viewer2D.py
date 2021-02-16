@@ -22,8 +22,9 @@ class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self) # This is a QWidget
-    self.edgeActor = None # Actor for active contours
-    self.overlay   = None # Actor for segmentation contours
+    self.contourActor = None # Actor for contours
+    self.overlay   = None    # Actor for segmentation contours
+    self.wrongContourActor = None
     self.iDim = iDim      # Slice dimensions
     self.lastSize = (0,0) # Used for corner button
     self.buttonWidget = None
@@ -308,7 +309,14 @@ class Viewer2D(QFrame):
     self.cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
     self.viewer.GetRenderer().AddViewProp(self.cornerAnnotation)
 
-  def InitializeContour(self, data, color=yellow):
+  def InitializeContours(self, data, color=yellow):
+    # Disable interactor
+    self.viewer.GetRenderWindow().GetInteractor().Disable()
+
+    if self.contourActor is not None:
+      self.viewer.GetRenderer().RemoveActor(self.contourActor)
+      self.contourActor = None
+
     # Update contours
     self.plane = vtk.vtkPlane()
     RCW = self.viewer.GetResliceCursorWidget()    
@@ -332,40 +340,49 @@ class Viewer2D(QFrame):
     edgeMapper = vtk.vtkPolyDataMapper()
     edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
           
-    self.edgeActor = vtk.vtkActor()
-    self.edgeActor.SetMapper(edgeMapper)
-    prop = self.edgeActor.GetProperty()
+    self.contourActor = vtk.vtkActor()
+    self.contourActor.SetMapper(edgeMapper)
+    prop = self.contourActor.GetProperty()
     renderLinesAsTubes(prop)
     prop.SetColor(color) # If Scalars are extracted - they turn green
 
     # Move in front of image
     transform = vtk.vtkTransform()
     transform.Translate(normal)
-    self.edgeActor.SetUserTransform(transform)
+    self.contourActor.SetUserTransform(transform)
 
     # Add actor to renderer
-    self.viewer.GetRenderer().AddViewProp(self.edgeActor)
+    self.viewer.GetRenderer().AddViewProp(self.contourActor)
+
+    # Enable interactor again
+    self.viewer.GetRenderWindow().GetInteractor().Enable()
 
   def ShowHideContours(self, show):
-    if self.edgeActor is not None:
-      self.edgeActor.SetVisibility(show)
+    if self.contourActor is not None:
+      self.contourActor.SetVisibility(show)
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
 
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
 
-  def UpdateContour(self):
-    if self.edgeActor is not None:
+  def UpdateContours(self, transform=None):
+    if self.contourActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
-      self.plane.SetOrigin(ps.GetOrigin())
       normal = ps.GetNormal()
+      origin = ps.GetOrigin()
+      # If transform -> modify origin and normal
+
+      self.plane.SetOrigin(origin)
       self.plane.SetNormal(normal)
+
+      # if transform apply inverse transform to contours
+      
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
       transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
-      self.edgeActor.SetUserTransform(transform)
+      self.contourActor.SetUserTransform(transform)
     
   def Start(self):
     self.interactor.Initialize()
