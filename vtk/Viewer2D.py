@@ -1,8 +1,8 @@
-# TODO: x. Viewer2DStacked 
-#       x. Main using it and 3D (hack)
-#       x. 3D widget
-#       x. Buttons on stacked widget
-#       5. Buttons on 3D widget
+# Clean-up
+# Stack with 2 views
+# World coordinates of click
+# Transformation
+# Registration
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -13,174 +13,22 @@ from collections import deque
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QFrame
 from PyQt5.QtCore import pyqtSignal
 
-from vtkUtils import renderLinesAsTubes
+from vtkUtils import renderLinesAsTubes, AxesToTransform
 
-class Viewer3D(QFrame):
-  def __init__(self, parent, iDim=0):
-    super(Viewer3D, self).__init__(parent)
-    self.interactor = QVTKRenderWindowInteractor(self)
-    self.renderer = vtk.vtkRenderer()
-    self.renderer.SetBackground(245.0/255.0,245.0/255.0,245.0/255.0)
-    self.renderer.SetBackground2(170.0/255.0,170.0/255.0,170.0/255.0)
-    self.renderer.GradientBackgroundOn()
-    
-    self.interactor.GetRenderWindow().AddRenderer(self.renderer)
+import math
 
-    self.planeWidgets = []
-    self.SetupPlaneWidgets()
-
-    layout = QHBoxLayout(self)
-    layout.setContentsMargins(0,0,0,0)
-    layout.addWidget(self.interactor)
-    self.setLayout(layout)
-    self.buttonWidgets = []
-    self.lastSize = (0,0) # Used for corner buttons
-  def EnablePlaneWidgets(self, reader):
-    imageDims = reader.GetOutput().GetDimensions()
-    for i in range(3):
-      self.planeWidgets[i].SetInputConnection(reader.GetOutputPort())
-      self.planeWidgets[i].SetPlaneOrientation(i)
-      self.planeWidgets[i].SetSliceIndex(imageDims[i] // 2)
-      self.planeWidgets[i].GetInteractor().Enable()
-      self.planeWidgets[i].On()
-      self.planeWidgets[i].InteractionOn()
-
-  def Off(self):
-    for i in range(len(self.planeWidgets)):
-      self.planeWidgets[i].Off()
-      
-  def SetupPlaneWidgets(self):
-    picker = vtk.vtkCellPicker()
-    picker.SetTolerance(0.005)
-    pwTextureProp = vtk.vtkProperty()
-    for i in range(3):
-      pw =  vtk.vtkImagePlaneWidget()
-      pw.SetInteractor(self.interactor)
-      pw.SetPicker(picker)
-      pw.RestrictPlaneToVolumeOn()
-      color = [0.0, 0.0, 0.0]
-      color[i] = 1
-      pw.GetPlaneProperty().SetColor(color)
-      pw.SetTexturePlaneProperty(pwTextureProp)
-      pw.TextureInterpolateOn()
-      pw.SetResliceInterpolateToLinear()
-      pw.DisplayTextOn()
-      pw.SetDefaultRenderer(self.renderer)
-
-      prop = pw.GetPlaneProperty()
-      renderLinesAsTubes(prop)
-      pw.SetPlaneProperty(prop)
-
-      prop = pw.GetSelectedPlaneProperty()
-      renderLinesAsTubes(prop)
-      pw.SetSelectedPlaneProperty(prop)
-      
-      prop = pw.GetCursorProperty()
-      renderLinesAsTubes(prop)
-      pw.SetCursorProperty(prop)
-
-      pw.Modified()
-      self.planeWidgets.append(pw)
-
-  def AddCornerButtons(self):
-    # Add corner buttons
-    fileName0 = ['./S00.png', './C00.png', './A00.png']
-    fileName1 = ['./S01.png', './C01.png', './A01.png']
-    for i in range(3):
-      reader = vtk.vtkPNGReader()
-      reader.SetFileName(fileName0[(i + 1) % 3])
-      reader.Update()
-      texture0 = reader.GetOutput()
-      reader = vtk.vtkPNGReader()
-      reader.SetFileName(fileName1[(i + 1) % 3])
-      reader.Update()
-      texture1 = reader.GetOutput()
-      self.AddCornerButton(texture0, texture1)
-
-  def AddCornerButton(self, texture0, texture1):
-    """
-    Add corner button. TODO: Support callback argument
-    """
-
-    # Render to ensure viewport has the right size (it has not)
-    buttonRepresentation = vtk.vtkTexturedButtonRepresentation2D()
-    buttonRepresentation.SetNumberOfStates(2)
-    buttonRepresentation.SetButtonTexture(0, texture0)
-    buttonRepresentation.SetButtonTexture(1, texture1)
-    buttonWidget = vtk.vtkButtonWidget()
-    buttonWidget.SetInteractor(self.interactor)
-    buttonWidget.SetRepresentation(buttonRepresentation)
-    buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.onTogglePlanesClicked)
-    buttonWidget.On()
-    self.buttonWidgets.append(buttonWidget)
-
-    renWin = self.interactor.GetRenderWindow()
-    renWin.AddObserver('ModifiedEvent', self.resizeCallback)
-
-  def dataValid(self):
-    return self.planeWidgets[0].GetResliceOutput().GetDimensions() > (0,0,0)
-
-  def onTogglePlanesClicked(self, widget, event):
-    # TODO: Find a better way to see if connection is made
-    if (self.dataValid()):
-      index = -1
-      isChecked = widget.GetRepresentation().GetState()
-      if (widget == self.buttonWidgets[0]):
-        index = 0
-      elif (widget == self.buttonWidgets[1]):
-        index = 1
-      elif (widget == self.buttonWidgets[2]):
-        index = 2
-      index = (index + 1) % 3
-      if (index > -1):
-        if isChecked:
-          self.planeWidgets[index].Off()
-        else:
-          self.planeWidgets[index].On()
-    return
-    
-  def Initialize(self):
-    self.interactor.Initialize()
-    self.interactor.Start()
-
-  def resizeCallback(self, widget, event):
-    """
-    Callback for repositioning button. Only observe this if
-    a button is added
-    """
-    curSize = widget.GetSize()
-    if (curSize != self.lastSize):
-      self.lastSize = curSize
-    
-      upperRight = vtk.vtkCoordinate()
-      upperRight.SetCoordinateSystemToNormalizedDisplay()
-      upperRight.SetValue(1.0, 1.0)
-
-      renderer = self.renderer # self.planeWidget[0].GetDefaultRenderer()
-      for i in range(len(self.buttonWidgets)):
-        buttonRepresentation = self.buttonWidgets[i].GetRepresentation()
-
-        bds = [0]*6
-        sz = 40.0
-        bds[0] = upperRight.GetComputedDisplayValue(renderer)[0] - (i+1)*sz
-        bds[1] = bds[0] + sz
-        bds[2] = upperRight.GetComputedDisplayValue(renderer)[1] - sz
-        bds[3] = bds[2] + sz
-        bds[4] = bds[5] = 0.0
-      
-        # Scale to 1, default is .5
-        buttonRepresentation.SetPlaceFactor(1)
-        buttonRepresentation.PlaceWidget(bds)
     
 class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self) # This is a QWidget
-    self.edgeActor = None # Actor for contours
+    self.edgeActor = None # Actor for active contours
+    self.overlay   = None # Actor for segmentation contours
     self.iDim = iDim      # Slice dimensions
     self.lastSize = (0,0) # Used for corner button
     self.buttonWidget = None
     self.cornerAnnotation = None
+    self.buttonSize = 40.0
     layout = QHBoxLayout(self)
     layout.addWidget(interactor)
     layout.setContentsMargins(0, 0, 0, 0)
@@ -202,6 +50,195 @@ class Viewer2D(QFrame):
   def Enable(self):
     self.viewer.GetRenderer().ResetCamera()
     self.viewer.GetInteractor().EnableRenderOn()
+
+  def AddOverlay(self, polyData):
+    # TODO: Add node to position in 3D
+    self.viewer.GetRenderWindow().GetInteractor().Disable()
+    if self.overlay is not None:
+      self.viewer.GetRenderer().RemoveActor(self.overlay)
+      self.overlay = None
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(polyData)
+    self.overlay = vtk.vtkActor()
+    self.overlay.SetMapper(mapper)
+    prop = self.overlay.GetProperty()
+    renderLinesAsTubes(prop)
+    prop.SetColor(yellow)
+    self.viewer.GetRenderer().AddActor(self.overlay)
+    self.viewer.GetRenderWindow().GetInteractor().Enable()
+  def RemoveOverlay(self):
+    if self.overlay is not None:
+      self.viewer.GetRenderWindow().GetInteractor().Disable()
+      self.viewer.GetRenderer().RemoveActor(self.overlay)
+      self.overlay = None
+      self.viewer.GetRenderWindow().GetInteractor().Enable()
+      
+  def ShowHideCursor(self, visible=False):
+    for i in range(3):
+      prop = self.viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(i)
+      if visible:
+        prop.SetOpacity(1.0)
+      else:
+        prop.SetOpacity(0.0)
+  def GetScreenTransform(self):
+    """
+    Get transform from origin to window slice plane
+    """
+    renderer = self.viewer.GetRenderer()
+    # Get screen frame
+    coordinate = vtk.vtkCoordinate()
+    coordinate.SetCoordinateSystemToNormalizedDisplay()
+    coordinate.SetValue(0.0, 0.0) # Lower left
+    lowerLeft = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(1.0, 0.0) # Lower right
+    lowerRight = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(0.0, 1.0) # Upper left
+    upperLeft = coordinate.GetComputedWorldValue(renderer)
+    first1 = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(lowerRight, lowerLeft, first1)
+    tmp = vtk.vtkMath.Distance2BetweenPoints(lowerRight, lowerLeft)
+    vtk.vtkMath.MultiplyScalar(first1, 1.0/math.sqrt(tmp))
+    second1 = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(upperLeft, lowerLeft, second1)
+    tmp = vtk.vtkMath.Distance2BetweenPoints(upperLeft, lowerLeft)
+    vtk.vtkMath.MultiplyScalar(second1, 1.0/math.sqrt(tmp))
+    normal1 = vtk.vtkVector3d()
+    vtk.vtkMath.Cross(first1, second1, normal1)
+    
+    # Get distance from plane to screen
+    cursor = self.viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
+    normal = cursor.GetPlane(self.iDim).GetNormal()
+    origin = cursor.GetPlane(self.iDim).GetOrigin()
+
+    PQ = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(origin, lowerLeft, PQ)
+    dist = vtk.vtkMath.Dot(normal, PQ)
+
+    trans = vtk.vtkTransform()
+    trans.Translate(dist*normal[0],dist*normal[1],dist*normal[2])
+    origin1 = trans.TransformPoint(lowerLeft)
+
+    normal0 = (0.0,0.0,1.0)
+    first0 =  (1.0,0.0,0.0)
+    origin0 = (0.0,0.0,0.0)
+    
+    transMat = AxesToTransform(normal0, first0, origin0,
+                               normal1, first1, origin1)
+    
+    return transMat
+    
+  def GetScreenImage(self, useOffScreenBuffer=True):
+    image = None
+    if useOffScreenBuffer:
+      image = self.readOffScrenBuffer()
+      image.SetOrigin(0,0,0)
+    else:
+      image = self.readOnScreenBuffer()
+
+    renderer = self.viewer.GetRenderer()      
+    coordinate = vtk.vtkCoordinate()
+    coordinate.SetCoordinateSystemToNormalizedDisplay()
+
+    dims = image.GetDimensions()
+    coordinate.SetValue(1.0, 0.0) # Lower right
+    lowerRight = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(0.0, 0.0) # Lower left
+    lowerLeft = coordinate.GetComputedWorldValue(renderer)
+    dx = vtk.vtkMath.Distance2BetweenPoints(
+      lowerRight,
+      lowerLeft)
+    dx = math.sqrt(dx) / dims[0]
+    
+    coordinate.SetValue(0.0, 1.0) # Upper left
+    dy = vtk.vtkMath.Distance2BetweenPoints(
+      coordinate.GetComputedWorldValue(renderer),
+      lowerLeft)
+    dy = math.sqrt(dy) / dims[1]
+    image.SetSpacing(dx,dy,0.0)
+    image.Modified()
+  
+    # Adjust origin
+    cursor = self.viewer.GetResliceCursor()
+    normal = cursor.GetPlane(self.iDim).GetNormal()
+    origin = cursor.GetPlane(self.iDim).GetOrigin()
+    PQ = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(origin, lowerLeft, PQ)
+    # Signed distance to plane
+    dist = vtk.vtkMath.Dot(normal, PQ)
+
+    # If VTK 9.0 add origin and orientation
+    trans = vtk.vtkTransform()
+    trans.Translate(dist*normal[0],dist*normal[1],dist*normal[2])
+    image.SetOrigin(trans.TransformPoint(lowerLeft))
+    image.Modified()
+    # TODO: Compute orientation for VTK 9.0
+    # image.SetOrientation(mat)
+    return image
+      
+  # Get transformation to screen view
+  def readOffScrenBuffer(self, hideCursor=True,
+                         hideContours=True,
+                         hideAnnotations=True):
+    renderWindow = self.viewer.GetRenderWindow()
+    if not renderWindow.SetUseOffScreenBuffers(True):
+      glRenderWindow.DebugOn()
+      glRenderWindow.SetUseOffScreenBuffers(True)
+      glRenderWindow.DebugOff()
+      print("Unable create a hardware frame buffer, the graphic board or driver can be too old")
+      sys.exit(-1)
+
+    # Hide cursor
+    if hideCursor:
+      self.ShowHideCursor(False)
+    if hideAnnotations:
+      self.ShowHideAnnotations(False)
+    if hideContours:
+      self.ShowHideContours(False)
+
+    windowToImageFilter = vtk.vtkWindowToImageFilter()
+    windowToImageFilter.SetInput(renderWindow)
+    windowToImageFilter.Update() # Issues a render call
+  
+    renderWindow.SetUseOffScreenBuffers(False)
+
+    self.ShowHideCursor(True)
+    self.ShowHideAnnotations(True)
+    self.ShowHideContours(True)
+    return windowToImageFilter.GetOutput()
+        
+  def readOnScreenBuffer(self, hideCursor=True,
+                         hideContours=True,
+                         hideAnnotations=True):
+    # Read on-screen buffer
+    renderWindow = self.viewer.GetRenderWindow()
+
+    oldSB = renderWindow.GetSwapBuffers()
+    renderWindow.SwapBuffersOff()
+    
+    if hideCursor:
+      self.ShowHideCursor(False)
+    if hideAnnotations:
+      self.ShowHideAnnotations(False)
+    if hideContours:
+      self.ShowHideContours(False)
+    
+    windowToImageFilter = vtk.vtkWindowToImageFilter()
+    windowToImageFilter.SetInput(renderWindow)
+
+    windowToImageFilter.SetScale(1)
+    windowToImageFilter.SetInputBufferTypeToRGBA()
+    
+    windowToImageFilter.ReadFrontBufferOff()
+    windowToImageFilter.Update() # Issues a render on input
+    
+    renderWindow.SetSwapBuffers(oldSB)
+    renderWindow.SwapBuffersOn()
+
+    self.ShowHideCursor(True)
+    self.ShowHideAnnotations(True)
+    self.ShowHideContours(True)
+    return windowToImageFilter.GetOutput()
+
   def resizeCallback(self, widget, event):
     """
     Callback for repositioning button. Only observe this if
@@ -219,7 +256,7 @@ class Viewer2D(QFrame):
       buttonRepresentation = self.buttonWidget.GetRepresentation()
 
       bds = [0]*6
-      sz = 40.0
+      sz = self.buttonSize
       bds[0] = upperRight.GetComputedDisplayValue(renderer)[0] - sz
       bds[1] = bds[0] + sz
       bds[2] = upperRight.GetComputedDisplayValue(renderer)[1] - sz
@@ -357,7 +394,7 @@ class Viewer2DStacked(QStackedWidget):
 
     # TODO: Add function to 2D view to assign a callback for button
     for i in range(self.count()):
-      self.widget(i).buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.btnClicked)
+      self.widget(i).buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.btnViewChangeClicked)
     
     # Make all views share the same cursor object
     for i in range(self.count()):
@@ -392,15 +429,12 @@ class Viewer2DStacked(QStackedWidget):
       self.widget(i).viewer.GetImageActor().SetVisibility(False)
       
     # Establish callbacks
-  def btnClicked(self, widget, event):
+  def btnViewChangeClicked(self, widget, event):
     index = self.currentIndex()
     index = index + 1
     index = index % 3
     self.setCurrentIndex(index)
-    # Hide other actors
-    #if (self.dataValid()):
-    #  for i in range(3):
-    #    self.widget(i).viewer.GetImageActor().SetVisibility((lambda x: True if x == index else False)(i))
+    # TODO: Consider hiding other actors
   def Initialize(self):
     for i in range(self.count()):
       self.widget(i).Start()

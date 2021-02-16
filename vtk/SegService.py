@@ -16,17 +16,17 @@ class SegmentationTask(QObject):
   @pyqtSlot('PyQt_PyObject', 'PyQt_PyObject')    
   def execute(self, arg, trans):
     # Number of Chan-Vese iterations
-    nIter = 8
-    std = 1.0 # [mm]
+    nIter = 20
+    std = 1.0 # [mm], original
+    squareSize = 1.0 # [mm]
+    
     saveMetaImage = False
     savePNGImage = False
     # Actual work - now done using SciPy
 
     # Gaussian smoothing
-    sx, sy, sz = arg.GetSpacing()
-    sx, sy = std / sx, std / sy
-    print(sx)
-    print(sy)
+    dx, dy, dz = arg.GetSpacing()
+    sx, sy = std / dx, std / dy
     smoother = vtk.vtkImageGaussianSmooth()
     smoother.SetStandardDeviations(sx, sy)
     smoother.SetDimensionality(2)
@@ -55,7 +55,8 @@ class SegmentationTask(QObject):
     npData = vtk_to_numpy(vtk_array).reshape(dims[2], dims[1], dims[0], nComponents)[:,:,:,0].reshape(dims[1], dims[0])
 
     # Seed for active contours
-    init_ls = checkerboard_level_set(npData.shape, 6)
+    iSquareSize = int(squareSize / dx)
+    init_ls = checkerboard_level_set(npData.shape, iSquareSize)
 
     contours = morphological_chan_vese(npData, nIter,
                                        init_level_set=init_ls, smoothing=2)

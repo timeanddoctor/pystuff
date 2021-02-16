@@ -1,13 +1,16 @@
 #!/bin/env python3
 
-# TODO: Stack of 2 widgets (postponed)
-#       View Axial and Coronal Ultrasound
-#       Sync views
-#       Contours in US
-# Thur
-#       Coordinates
-#       Grap US image
-#       Run segmentation
+# TODO: 
+#       Contours in 2D (done somewhat, clean when reg is pressed)
+#       Join polydata (pause renderers)
+#       Add misalignment and correction transform
+
+#       Stack of 2 widgets (postponed)
+#       Sync views (continued)
+#       Pick objects
+#       Introduce misalignment of contours
+#       Navigate with misalignment
+
 
 # 1. Get axes and perform reslice yourself. Get 3D coordinate of resliced point
 # 2. Adjust with distance to screen (distance to plane) (Works)
@@ -22,10 +25,9 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtk.util.colors import red, yellow
 
 from PyQt5.uic import loadUiType
-from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo, QRect, pyqtSlot
-from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter#, QGuiApplication
-
-import numpy as np
+from PyQt5.QtCore import QCoreApplication, Qt,\
+  QSettings, QFileInfo, QRect, pyqtSlot
+from PyQt5.QtWidgets import QFileDialog, QApplication, QAction, QCommonStyle, QStyle, QSplitter
 
 from vtkUtils import hexCol, renderLinesAsTubes, AxesToTransform
 
@@ -33,7 +35,8 @@ ui_file = os.path.join(os.path.dirname(__file__), 'SmartLock3.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
-from Viewer2D import Viewer3D, Viewer2D, Viewer2DStacked
+from Viewer2D import Viewer2D, Viewer2DStacked
+from Viewer3D import Viewer3D
 
 from SegService import SegmentationService
 
@@ -144,6 +147,12 @@ class SmartLock(QMainWindow, ui):
     self.DEFAULT_DIR_KEY = __file__
     self.segServer = SegmentationService(self)
     self.usActor = None
+
+    # Update this when load interior and exterior
+    self.CTContours = None
+
+    # Append all surfaces to this
+    self.appendFilter = vtk.vtkAppendPolyData()
     
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -198,93 +207,12 @@ class SmartLock(QMainWindow, ui):
     if index == 0:
       # Sync CT to US
       self.cb.syncViews = True
-  def showHideCursor(self, visible=False, target=0):
-    if target == 0:
-      # CT view
-      for iView in range(self.stackCT.count()):
-        for iDim in range(3):
-          prop = self.stackCT.widget(iView).viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(iDim)
-          if visible:
-            prop.SetOpacity(1.0)
-          else:
-            prop.SetOpacity(0.0)
-    else:
-      for iView in range(len(self.viewUS)):
-        for iDim in range(3):
-          prop = self.viewUS[iView].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(iDim)
-          if visible:
-            prop.SetOpacity(1.0)
-          else:
-            prop.SetOpacity(0.0)
 
-  def readOnScreenBuffer(self):
-    # Read on-screen buffer
-    renderWindow = self.viewUS[1].viewer.GetRenderWindow()
-    
-    oldSB = renderWindow.GetSwapBuffers()
-    renderWindow.SwapBuffersOff()
-    
-    # Hide cursor
-    self.showHideCursor(False, 1)
-    self.viewUS[1].ShowHideAnnotations(False)
-    # Hide contours
-    self.viewUS[1].ShowHideContours(False)
-    
-    self.windowToImageFilter = vtk.vtkWindowToImageFilter()
-    self.windowToImageFilter.SetInput(renderWindow)
-
-    self.windowToImageFilter.SetScale(1)
-    self.windowToImageFilter.SetInputBufferTypeToRGBA()
-    
-    self.windowToImageFilter.ReadFrontBufferOff()
-    self.windowToImageFilter.Update() # Issues a render on input
-    
-    renderWindow.SetSwapBuffers(oldSB)
-    renderWindow.SwapBuffersOn()
-
-    self.showHideCursor(True, 1)
-    self.viewUS[1].ShowHideAnnotations(True)
-    self.viewUS[1].ShowHideContours(True)
-    
-  def readOffScrenBuffer(self):
-    print("Off-screen")
-    renderWindow = self.viewUS[1].viewer.GetRenderWindow()
-    if not renderWindow.SetUseOffScreenBuffers(True):
-      glRenderWindow.DebugOn()
-      glRenderWindow.SetUseOffScreenBuffers(True)
-      glRenderWindow.DebugOff()
-      print("Unable create a hardware frame buffer, the graphic board or driver can be too old")
-      sys.exit(-1)
-      renderWindow.Render()
-
-    # Hide cursor
-    self.showHideCursor(False, 1)
-    self.viewUS[1].ShowHideAnnotations(False)
-    # Hide contours
-    self.viewUS[1].ShowHideContours(False)
-
-    self.windowToImageFilter = vtk.vtkWindowToImageFilter()
-    self.windowToImageFilter.SetInput(renderWindow)
-    self.windowToImageFilter.Update() # Issues a render call
-  
-    renderWindow.SetUseOffScreenBuffers(False)
-
-    self.showHideCursor(True, 1)
-    self.viewUS[1].ShowHideAnnotations(True)
-    self.viewUS[1].ShowHideContours(True)
-    
   def onSegClicked(self):
     print("Segmentation")
-    showCoordinates = True
+    showCoordinates = False
     savePNGImage = False
     saveMetaImage = False
-    
-    # Both works
-    self.readOnScreenBuffer()
-    #self.readOffScrenBuffer()
-    self.segImage = self.windowToImageFilter.GetOutput()
-    print(self.segImage)
-    self.segImage.SetOrigin(0,0,0)
 
     if savePNGImage:
       writer = vtk.vtkPNGWriter()
@@ -292,75 +220,18 @@ class SmartLock(QMainWindow, ui):
       writer.SetInputData(self.segImage)
       writer.Write()
 
-    # Compute spacing in world-coordinates
-    renderer = self.viewUS[1].viewer.GetRenderer()      
-    coordinate = vtk.vtkCoordinate()
-    coordinate.SetCoordinateSystemToNormalizedDisplay()
+    self.segImage = self.viewUS[1].GetScreenImage()
+    # We move image to (0,0,0) but keep size
+    self.segImage.SetOrigin(0,0,0)
 
-    dims = self.segImage.GetDimensions()
-    coordinate.SetValue(1.0, 0.0)
-    lowerRight0 = coordinate.GetComputedWorldValue(renderer)
-    lowerRight = np.array(lowerRight0)
-    coordinate.SetValue(0.0, 0.0)
-    lowerLeft0 = coordinate.GetComputedWorldValue(renderer)
-    lowerLeft = np.array(lowerLeft0)
-    coordinate.SetValue(0.0, 1.0)
-    upperLeft0 = coordinate.GetComputedWorldValue(renderer)
-    upperLeft = np.array(upperLeft0)
-    dx = np.sqrt(np.sum((lowerRight - lowerLeft) ** 2)) / dims[0]
-    dy = np.sqrt(np.sum((upperLeft - lowerLeft) ** 2)) / dims[1]
-    self.segImage.SetSpacing(dx,dy,0.0)
-    self.segImage.Modified()
-
-    #print('segImage stats:')
-    #print(self.segImage)
-
-    # Check distance to plane
-    cursor = self.viewUS[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
-    corners = [upperLeft0, lowerLeft0, lowerRight0]
-    normal = cursor.GetPlane(2).GetNormal()
-    origin = cursor.GetPlane(2).GetOrigin()
-    PQ = vtk.vtkVector3d()
-    dist = 0.0
-    for i in range(len(corners)):
-      # Compute distance to plane
-      vtk.vtkMath.Subtract(origin, corners[i], PQ)
-      dist = vtk.vtkMath.Dot(normal, PQ)
-      print(dist)
-
-    self.trans = vtk.vtkTransform()
-    
-    # Compute transformation from x = (1,0,0), y = (0,1,0) to origin and new orientation
-    normal0 = (0.0,0.0,1.0)
-    first0 =  (1.0,0.0,0.0)
-    origin0 = (0.0,0.0,0.0)
-    
-    origin1 = lowerLeft
-    first1 = lowerRight - lowerLeft
-    second1 = upperLeft - lowerLeft
-
-    normal1 = np.cross(first1, second1)
-    normal1 = normal1 / np.sqrt(np.sum(normal1**2))
-    
-    first1 = first1 / np.sqrt(np.sum(first1**2))
-
-    transMat = AxesToTransform(normal0, first0, origin0,
-                               normal1, first1, origin1)
-
+    # Transform from xy-plane to current plane
+    transMat = self.viewUS[1].GetScreenTransform()
     self.trans = vtk.vtkTransform()
     self.trans.SetMatrix(transMat)
 
-    # Distance from screen to data
-    offsetX = dist*normal[0]
-    offsetY = dist*normal[1]
-    offsetZ = dist*normal[2]
-    self.trans.PostMultiply()
-    self.trans.Translate(offsetX, offsetY, offsetZ)
-      
     if showCoordinates:
       # Center of plane
       origin = self.viewUS[1].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetPlaneSource().GetOrigin()
-      print(origin)
       for i in range(2):
         for j in range(2):
           coordinate.SetValue(float(i), float(j), 0.0)
@@ -370,64 +241,44 @@ class SmartLock(QMainWindow, ui):
           sys.stdout.write("%f)" % (coordinate.GetComputedWorldValue(renderer)[2]))
           print("")
 
-    # For VTK version 8.2, we need to add the orientation as a separate parameter
+    # For VTK version 8.2, we need to add the orientation as a separate parameter (self.trans)
+
+    # Callback for displaying segmentation
     self.segServer.ready.connect(self.updateSegmentation)
+    # Issue segmentation
     self.segServer.execute.emit(self.segImage, self.trans)
 
+    #GetWindowSlicePlaneCoordinates
   @pyqtSlot('PyQt_PyObject')
   def updateSegmentation(self, contours):
     self.lastUSContours = contours
-    # Display contours in 3D
-    #print("display contours")
-    tubes = vtk.vtkTubeFilter()
-    tubes.SetInputData(self.lastUSContours)
-    tubes.CappingOn()
-    tubes.SidesShareVerticesOff()
-    tubes.SetNumberOfSides(12)
-    tubes.SetRadius(2.0)
 
     edgeMapper = vtk.vtkPolyDataMapper()
-    edgeMapper.ScalarVisibilityOff()
-    edgeMapper.SetInputConnection(tubes.GetOutputPort())
-
+    edgeMapper.SetInputData(self.lastUSContours)
+    
     if self.usActor is not None:
       self.viewer3D.interactor.Disable()
       self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usActor)
       self.viewer3D.interactor.Enable()
-    
+
+    # Add contours in 3D space (should be misaligned!!!!)
     self.usActor = vtk.vtkActor()
     self.usActor.SetMapper(edgeMapper)
     prop = self.usActor.GetProperty()
-    #renderLinesAsTubes(prop)
-    prop.SetColor(red)
+    renderLinesAsTubes(prop)
+    prop.SetPointSize(4)
     prop.SetLineWidth(3)
+    prop.SetColor(red)
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usActor)
+
+    # Add overlay to 2D ultrasound
+    self.viewUS[1].AddOverlay(contours)
     self.Render()
 
   def onRegClicked(self):
     print("Registration")
-    # covert center to world coordinate and draw vtkSphereSource in 3D
-    coordinate = vtk.vtkCoordinate()
-    coordinate.SetCoordinateSystemToNormalizedDisplay()
-    coordinate.SetValue(.5,.5)
-    renderer = self.viewUS[1].viewer.GetRenderer()      
-    center = np.array(coordinate.GetComputedWorldValue(renderer))
-    sphere = vtk.vtkSphereSource()
-    sphere.SetCenter(center)
-    sphere.SetRadius(10.0)
-    sphere.SetPhiResolution(100)
-    sphere.SetThetaResolution(100)
-
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(sphere.GetOutputPort())
-
-    actor = vtk.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetColor(red)
-
-    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(actor)
+    self.viewUS[1].RemoveOverlay()
     self.Render()
-    
     
   def onApplyPresetClicked(self, index):
     window = 200
@@ -440,7 +291,7 @@ class SmartLock(QMainWindow, ui):
         rng = self.stackCT.widget(0).viewer.GetInput().GetScalarRange()
         window = rng[1]-rng[0]
         level = (rng[0]+rng[1])/2.0
-    for i in range(3):
+    for i in range(self.stackCT.count()):
       if self.stackCT.widget(i):
         self.stackCT.widget(i).viewer.SetColorWindow(window)
         self.stackCT.widget(i).viewer.SetColorLevel(level)
@@ -476,7 +327,7 @@ class SmartLock(QMainWindow, ui):
             widget.setHandleWidth(2) # Default is 3
     # Setup 3D viewer
     self.viewer3D = Viewer3D(self)
-    self.viewer3D.AddCornerButtons()
+    self.viewer3D.AddPlaneCornerButtons()
 
     self.layout3D.setContentsMargins(0,0,0,0)
     self.layout3D.addWidget(self.viewer3D)
@@ -514,12 +365,12 @@ class SmartLock(QMainWindow, ui):
     self.establishCallbacks()
     
     # Show widgets but hide non-existing data
-    for i in range(3):
+    for i in range(self.stackCT.count()):
       self.stackCT.widget(i).show()
       self.stackCT.widget(i).viewer.GetImageActor().SetVisibility(False)
 
     # Show widgets but hide non-existing data
-    for i in range(2):
+    for i in range(len(self.viewUS)):
       self.viewUS[i].show()
       self.viewUS[i].viewer.GetImageActor().SetVisibility(False)
 
@@ -531,7 +382,6 @@ class SmartLock(QMainWindow, ui):
   def onLoadClicked(self, fileType):
     mySettings = QSettings()
     fileDir = mySettings.value(self.DEFAULT_DIR_KEY)
-    print(fileDir)
     options = QFileDialog.Options()
     options |= QFileDialog.DontUseNativeDialog
     fileDialog = QFileDialog()
@@ -576,11 +426,18 @@ class SmartLock(QMainWindow, ui):
     connectFilter.SetExtractionModeToLargestRegion()
     connectFilter.Update()
 
-    self.vesselPolyData = connectFilter.GetOutput()
+    vesselPolyData = connectFilter.GetOutput()
 
+    
+    
+    self.appendFilter.AddInputData(vesselPolyData)
+    self.appendFilter.Update()
+    
+    # Disable interactor, remove actors, normals, initialize contours,
+    
     # Compute normals
     self.vesselNormals = vtk.vtkPolyDataNormals()
-    self.vesselNormals.SetInputData(self.vesselPolyData)
+    self.vesselNormals.SetInputData(vesselPolyData)
 
     # Mapper
     mapper = vtk.vtkPolyDataMapper()
@@ -595,6 +452,9 @@ class SmartLock(QMainWindow, ui):
     # Assign actor to the renderer
     prop.SetOpacity(0.35)
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.vessels)
+
+
+    
     # TODO: Make this work if read before US
     if contours:
       for i in range(self.stackCT.count()):
@@ -603,7 +463,6 @@ class SmartLock(QMainWindow, ui):
         self.viewUS[i].InitializeContour(self.vesselNormals)
     self.Render()
 
-  # TODO
   def loadUSFile(self, fileName):
     # Load VTK Meta Image
     reader = vtk.vtkMetaImageReader()
@@ -632,9 +491,8 @@ class SmartLock(QMainWindow, ui):
     for i in range(len(self.viewUS)):
       self.viewUS[i].viewer.GetInteractor().Enable()
 
-    # Update 3D
     self.ResetUSViews()
-    self.SetUSResliceMode(1)
+    self.SetUSResliceMode(1) # Oblique
     self.Render()
   def loadFile(self, fileName):
     # Load VTK Meta Image
@@ -713,7 +571,6 @@ class SmartLock(QMainWindow, ui):
       # Ignored after loading data!!! (why)
       self.viewUS[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.viewUS[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
-  
   def ResetViews(self):
     for i in range(self.stackCT.count()):
       self.stackCT.widget(i).viewer.Reset()
@@ -773,6 +630,20 @@ if __name__ == '__main__':
   main_window.setGeometry(0,40,main_window.width(), main_window.height())
   main_window.show()
   main_window.initialize()
+  # Hack to load stuff on startup
+  if len(sys.argv) > 1:
+    mySettings = QSettings()
+    fileDir = mySettings.value(main_window.DEFAULT_DIR_KEY)
+    defaultFile = {0 : 'CT-Abdomen.mhd',
+                   1 : 'Connected.vtp',
+                   2 : 'Liver_3D_Fast_Marching_Closed.vtp',
+                   3 : 'VesselVolume.mhd'}
+    
+    main_window.loadFile(os.path.join(fileDir,defaultFile[0]))
+    main_window.loadUSFile(os.path.join(fileDir,defaultFile[3]))
+    main_window.loadSurface(os.path.join(fileDir,defaultFile[1]),True) 
+    main_window.loadSurface(os.path.join(fileDir,defaultFile[2]),False) 
+  
   sys.exit(app.exec_())
 
 # Local variables: #
