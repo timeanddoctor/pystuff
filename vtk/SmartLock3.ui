@@ -90,6 +90,9 @@
                  <item row="1" column="2">
                   <widget class="QPushButton" name="btnRightElevation"/>
                  </item>
+		 <item row="1" column="1">
+		   <widget class="QPushButton" name="btnResetElevation"/>
+		 </item>
                  <item row="2" column="1">
                   <widget class="QPushButton" name="btnDownElevation"/>
                  </item>
@@ -206,6 +209,9 @@
                  <item row="1" column="2">
                   <widget class="QPushButton" name="btnRightAzimuth"/>
                  </item>
+		 <item row="1" column="1">
+		   <widget class="QPushButton" name="btnResetAzimuth"/>
+		 </item>
                  <item row="2" column="1">
                   <widget class="QPushButton" name="btnDownAzimuth"/>
                  </item>

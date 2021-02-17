@@ -13,7 +13,7 @@ from collections import deque
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QFrame
 from PyQt5.QtCore import pyqtSignal
 
-from vtkUtils import renderLinesAsTubes, AxesToTransform
+from vtkUtils import renderLinesAsTubes, AxesToTransform, rotationFromHomogeneous
 
 import math
 
@@ -48,6 +48,7 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
+
   def Enable(self):
     self.viewer.GetRenderer().ResetCamera()
     self.viewer.GetInteractor().EnableRenderOn()
@@ -75,6 +76,7 @@ class Viewer2D(QFrame):
 
     self.viewer.GetRenderer().AddActor(self.overlay)
     self.viewer.GetRenderWindow().GetInteractor().Enable()
+
   def RemoveOverlay(self):
     if self.overlay is not None:
       self.viewer.GetRenderWindow().GetInteractor().Disable()
@@ -89,6 +91,26 @@ class Viewer2D(QFrame):
         prop.SetOpacity(1.0)
       else:
         prop.SetOpacity(0.0)
+  def GetDirections(self):
+    renderer = self.viewer.GetRenderer()
+    # Get screen frame
+    coordinate = vtk.vtkCoordinate()
+    coordinate.SetCoordinateSystemToNormalizedDisplay()
+    coordinate.SetValue(0.0, 0.0) # Lower left
+    lowerLeft = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(1.0, 0.0) # Lower right
+    lowerRight = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(0.0, 1.0) # Upper left
+    upperLeft = coordinate.GetComputedWorldValue(renderer)
+    first1 = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(lowerRight, lowerLeft, first1)
+    tmp = vtk.vtkMath.Distance2BetweenPoints(lowerRight, lowerLeft)
+    vtk.vtkMath.MultiplyScalar(first1, 1.0/math.sqrt(tmp))
+    second1 = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(upperLeft, lowerLeft, second1)
+    tmp = vtk.vtkMath.Distance2BetweenPoints(upperLeft, lowerLeft)
+    vtk.vtkMath.MultiplyScalar(second1, 1.0/math.sqrt(tmp))
+    return first1, second1
   def GetScreenTransform(self):
     """
     Get transform from origin to window slice plane
@@ -374,23 +396,31 @@ class Viewer2D(QFrame):
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
 
-  def UpdateContours(self, transform=None):
+  def UpdateContours(self, misalign=None):
     if self.contourActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
       normal = ps.GetNormal()
       origin = ps.GetOrigin()
-      # If transform -> modify origin and normal
-
+      if misalign is not None:
+        inverse = vtk.vtkTransform()
+        inverse.DeepCopy(misalign)
+        inverse.Inverse()
+        origin = inverse.TransformPoint(origin)
+        # first column is new x-axis
+        mat3 = rotationFromHomogeneous(inverse.GetMatrix())
+        mat3.MultiplyPoint(normal, normal)
       self.plane.SetOrigin(origin)
       self.plane.SetNormal(normal)
 
-      # if transform apply inverse transform to contours
-      
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
       transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
+      transform.PostMultiply()
+      if misalign is not None:
+        transform.Concatenate(misalign)
       self.contourActor.SetUserTransform(transform)
+
     
   def Start(self):
     self.interactor.Initialize()

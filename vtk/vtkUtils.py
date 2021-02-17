@@ -90,6 +90,13 @@ def renderPointsAndLinesAsTubesAndSpheres(prop):
   renderLinesAsTubes(prop)
   renderLinesAsSpheres(prop)
 
+def rotationFromHomogeneous(mat4):
+  mat3 = vtk.vtkMatrix3x3()
+  for i in range(3):
+    for j in range(3):
+      mat3.SetElement(i,j,mat4.GetElement(i,j))
+  return mat3
+                  
 def polyInfo(filter):
   """
   Debug information about output from vtkPolyData producing filters

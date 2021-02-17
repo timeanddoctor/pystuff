@@ -36,6 +36,8 @@ ui_file = os.path.join(os.path.dirname(__file__), 'SmartLock3.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
+deltaXYZ = 2.5 # [mm] steps for misalignment
+
 from Viewer2D import Viewer2D, Viewer2DStacked
 from Viewer3D import Viewer3D
 
@@ -49,7 +51,7 @@ def enum(*sequential, **named):
 
 # Two simple enumerations
 direction = enum('UP','DOWN','LEFT','RIGHT')
-azel = enum('AZ','EL')
+azel = enum('AZ','EL', 'RESET')
 
 defaultFiles = {0 : 'CT-Abdomen.mhd',
                 1 : 'Connected.vtp',
@@ -175,11 +177,41 @@ class SmartLock(QMainWindow, ui):
 
   def onArrowsClicked(self, _view, _direction):
     if _view == azel.AZ:
+      first, second = self.viewUS[1].GetDirections()
       if (_direction == direction.RIGHT):
-        print('hello')
-        # Modify transformation
-        # Update contours
-    
+        # Modify transformation 
+        vtk.vtkMath.MultiplyScalar(first, deltaXYZ)
+        self.misAlignment.Translate(first)
+      elif (_direction == direction.LEFT):
+        vtk.vtkMath.MultiplyScalar(first, -deltaXYZ)
+        self.misAlignment.Translate(first)
+      elif (_direction == direction.UP):
+        vtk.vtkMath.MultiplyScalar(second, deltaXYZ)
+        self.misAlignment.Translate(second)
+      elif (_direction == direction.DOWN):
+        vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
+        self.misAlignment.Translate(second)
+    elif _view == azel.EL:
+      first, second = self.viewUS[0].GetDirections()
+      if (_direction == direction.RIGHT):
+        # Modify transformation 
+        vtk.vtkMath.MultiplyScalar(first, deltaXYZ)
+        self.misAlignment.Translate(first)
+      elif (_direction == direction.LEFT):
+        vtk.vtkMath.MultiplyScalar(first, -deltaXYZ)
+        self.misAlignment.Translate(first)
+      elif (_direction == direction.UP):
+        vtk.vtkMath.MultiplyScalar(second, deltaXYZ)
+        self.misAlignment.Translate(second)
+      elif (_direction == direction.DOWN):
+        vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
+        self.misAlignment.Translate(second)
+    elif _view == azel.RESET:
+      self.misAlignment.Identity()
+    # Update contours
+    for i in range(2):
+      self.viewUS[i].UpdateContours(self.misAlignment)
+    self.Render()
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
     self.stackCT.Initialize()
@@ -229,8 +261,21 @@ class SmartLock(QMainWindow, ui):
     self.btnSyncUSCT.clicked.connect(lambda: self.onSyncClicked(1))
     self.btnReg.clicked.connect(self.onRegClicked)
     self.btnSeg.clicked.connect(self.onSegClicked)
-    self.btnRightAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.RIGHT))
 
+    self.btnRightAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.RIGHT))
+    self.btnLeftAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.LEFT))
+    self.btnUpAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.UP))
+    self.btnDownAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.DOWN))
+    self.btnResetAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.RESET, direction.DOWN))
+    
+    self.btnRightElevation.clicked.connect(lambda: self.onArrowsClicked(azel.EL, direction.RIGHT))
+    self.btnLeftElevation.clicked.connect(lambda: self.onArrowsClicked(azel.EL, direction.LEFT))
+    self.btnUpElevation.clicked.connect(lambda: self.onArrowsClicked(azel.EL, direction.UP))
+    self.btnDownElevation.clicked.connect(lambda: self.onArrowsClicked(azel.EL, direction.DOWN))
+    self.btnResetElevation.clicked.connect(lambda: self.onArrowsClicked(azel.RESET, direction.DOWN))
+
+
+    
   def onSyncClicked(self, index):
     if index == 0:
       # Sync CT to US
@@ -269,11 +314,11 @@ class SmartLock(QMainWindow, ui):
           sys.stdout.write("%f)" % (coordinate.GetComputedWorldValue(renderer)[2]))
           print("")
 
-    # For VTK version 8.2, we need to add the orientation as a separate parameter (self.trans)
-
     # Callback for displaying segmentation
     self.segServer.ready.connect(self.updateSegmentation)
-    # Issue segmentation
+
+    # For VTK version 8.2, we need to add the orientation as a
+    # separate parameter, self.trans
     self.segServer.execute.emit(self.segImage, self.trans)
 
   @pyqtSlot('PyQt_PyObject')
@@ -332,11 +377,13 @@ class SmartLock(QMainWindow, ui):
     self.btnDownAzimuth.setIcon(style.standardIcon(QStyle.SP_ArrowDown))
     self.btnRightAzimuth.setIcon(style.standardIcon(QStyle.SP_ArrowForward))
     self.btnLeftAzimuth.setIcon(style.standardIcon(QStyle.SP_ArrowBack))
-
+    self.btnResetAzimuth.setIcon(style.standardIcon(QStyle.SP_BrowserStop))
+    
     self.btnUpElevation.setIcon(style.standardIcon(QStyle.SP_ArrowUp))
     self.btnDownElevation.setIcon(style.standardIcon(QStyle.SP_ArrowDown))
     self.btnRightElevation.setIcon(style.standardIcon(QStyle.SP_ArrowForward))
     self.btnLeftElevation.setIcon(style.standardIcon(QStyle.SP_ArrowBack))
+    self.btnResetElevation.setIcon(style.standardIcon(QStyle.SP_BrowserStop))
 
     self.centralWidget().layout().setContentsMargins(0, 0, 0, 0)
     self.statusBar().hide()
