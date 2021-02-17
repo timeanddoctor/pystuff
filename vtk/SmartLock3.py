@@ -46,9 +46,16 @@ def enum(*sequential, **named):
     reverse = dict((value, key) for key, value in enums.items())
     enums['reverse_mapping'] = reverse
     return type('Enum', (), enums)
-  
+
+# Two simple enumerations
 direction = enum('UP','DOWN','LEFT','RIGHT')
 azel = enum('AZ','EL')
+
+defaultFiles = {0 : 'CT-Abdomen.mhd',
+                1 : 'Connected.vtp',
+                2 : 'Liver_3D_Fast_Marching_Closed.vtp',
+                3 : 'VesselVolumeUncompressed.mhd'}
+
 
 # Initialize this using either CT or US
 class ResliceCallback(object):
@@ -223,6 +230,7 @@ class SmartLock(QMainWindow, ui):
     self.btnReg.clicked.connect(self.onRegClicked)
     self.btnSeg.clicked.connect(self.onSegClicked)
     self.btnRightAzimuth.clicked.connect(lambda: self.onArrowsClicked(azel.AZ, direction.RIGHT))
+
   def onSyncClicked(self, index):
     if index == 0:
       # Sync CT to US
@@ -406,12 +414,8 @@ class SmartLock(QMainWindow, ui):
     fileDialog = QFileDialog()
     fileDialog.setDirectory(fileDir)
 
-    defaultFile = {0 : 'CT-Abdomen.mhd',
-                   1 : 'Connected.vtp',
-                   2 : 'Liver_3D_Fast_Marching_Closed.vtp',
-                   3 : 'VesselVolume.mhd'}[fileType]
 
-    defaultFile = os.path.join(fileDir, defaultFile)
+    defaultFile = os.path.join(fileDir, defaultFiles[fileType])
     
     fileName, _ = \
       fileDialog.getOpenFileName(self,
@@ -655,15 +659,11 @@ if __name__ == '__main__':
   if len(sys.argv) > 1:
     mySettings = QSettings()
     fileDir = mySettings.value(main_window.DEFAULT_DIR_KEY)
-    defaultFile = {0 : 'CT-Abdomen.mhd',
-                   1 : 'Connected.vtp',
-                   2 : 'Liver_3D_Fast_Marching_Closed.vtp',
-                   3 : 'VesselVolume.mhd'}
     
-    main_window.loadFile(os.path.join(fileDir,defaultFile[0]))
-    main_window.loadUSFile(os.path.join(fileDir,defaultFile[3]))
-    main_window.loadSurface(os.path.join(fileDir,defaultFile[1]),0) 
-    main_window.loadSurface(os.path.join(fileDir,defaultFile[2]),1) 
+    main_window.loadFile(os.path.join(fileDir,defaultFiles[0]))
+    main_window.loadUSFile(os.path.join(fileDir,defaultFiles[3]))
+    main_window.loadSurface(os.path.join(fileDir,defaultFiles[1]),0) 
+    main_window.loadSurface(os.path.join(fileDir,defaultFiles[2]),1) 
   
   sys.exit(app.exec_())
 
