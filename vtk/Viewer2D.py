@@ -340,6 +340,7 @@ class Viewer2D(QFrame):
     self.viewer.GetRenderer().AddViewProp(self.cornerAnnotation)
 
   def InitializeContours(self, data, color=yellow):
+    self.data = data
     # Disable interactor
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
@@ -357,7 +358,7 @@ class Viewer2D(QFrame):
 
     # Generate line segments
     cutEdges = vtk.vtkCutter()
-    cutEdges.SetInputConnection(data.GetOutputPort())#main_window.vesselNormals.GetOutputPort())
+    cutEdges.SetInputConnection(self.data.GetOutputPort())#main_window.vesselNormals.GetOutputPort())
     cutEdges.SetCutFunction(self.plane)
     cutEdges.GenerateCutScalarsOff()
     cutEdges.SetValue(0, 0.5)
@@ -409,19 +410,29 @@ class Viewer2D(QFrame):
         origin = inverse.TransformPoint(origin)
         # first column is new x-axis
         mat3 = rotationFromHomogeneous(inverse.GetMatrix())
-        mat3.MultiplyPoint(normal, normal)
+        tmp = vtk.vtkVector3d()
+        tmp[0] = normal[0]
+        tmp[1] = normal[1]
+        tmp[2] = normal[2]
+        mat3.MultiplyPoint(tmp,tmp)
       self.plane.SetOrigin(origin)
-      self.plane.SetNormal(normal)
+      self.plane.SetNormal(tmp)
+      self.plane.Modified() # TEST
 
+      #self.data.Modified() # 
+      
+      #self.cutEdges.Modified() # TEST      
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
       transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
       transform.PostMultiply()
+      transform.AddObserver('EndEvent', self.test) # TEST
       if misalign is not None:
         transform.Concatenate(misalign)
       self.contourActor.SetUserTransform(transform)
-
-    
+      self.contourActor.Modified()
+  def test(self, caller, ev):
+    print('test')
   def Start(self):
     self.interactor.Initialize()
     self.interactor.Start()
