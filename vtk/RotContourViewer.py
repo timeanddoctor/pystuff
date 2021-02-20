@@ -101,7 +101,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.imgToMeshTransform = vtk.vtkTransform()
     self.imgToMeshTransform.Identity()
     self.imgToMeshTransform.PostMultiply()
-
+    self.vessels = None
   def onOrientationClicked(self):
     """
     Blue widget. TODO: Try to actually rotate mesh instead
@@ -180,7 +180,8 @@ class FourPaneViewer(QMainWindow, ui):
         
     for i in range(3):
       self.vtk_widgets[i].UpdateContours(self.imgToMeshTransform)
-    self.vessels.SetUserTransform(self.imgToMeshTransform)
+    if self.vessels is not None:
+      self.vessels.SetUserTransform(self.imgToMeshTransform)
     self.Render()
   def onLoadClicked(self, fileType):
     mySettings = QSettings()
@@ -476,62 +477,6 @@ class FourPaneViewer(QMainWindow, ui):
     verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
     vert_layout.addSpacerItem(verticalSpacer)
 
-    # Trans X
-    horz_layout2 = QHBoxLayout()
-    self.sliderTX = QFloatSlider(Qt.Horizontal,self)
-    self.sliderTX.setRange(-10.0, 10.0, 21)
-    self.sliderTX.setFloatValue(0.0)
-    self.sliderTX.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    self.btnTransX = QToolButton()
-    act = QAction()
-    act.setText("TX")
-    self.btnTransX.setDefaultAction(act)
-    self.btnTransX.clicked.connect(self.onOrientationClicked)
-    horz_layout2.addWidget(self.sliderTX)
-    horz_layout2.addWidget(self.btnTransX)
-
-    # Rot X
-    horz_layout3 = QHBoxLayout()
-    self.sliderRX = QFloatSlider(Qt.Horizontal,self)
-    self.sliderRX.setRange(-90.0,90.0,37)
-    self.sliderRX.setFloatValue(0.0)
-    self.sliderRX.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    self.btnRotX = QToolButton()
-    act = QAction()
-    act.setText("RX")
-    self.btnRotX.setDefaultAction(act)
-    self.btnRotX.clicked.connect(self.onOrientationClicked)
-    horz_layout3.addWidget(self.sliderRX)
-    horz_layout3.addWidget(self.btnRotX)
-
-    # Trans Z
-    horz_layoutTZ = QHBoxLayout()
-    self.sliderTZ = QFloatSlider(Qt.Horizontal,self)
-    self.sliderTZ.setRange(-10.0, 10.0, 21)
-    self.sliderTZ.setFloatValue(0.0)
-    self.sliderTZ.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    self.btnTransZ = QToolButton()
-    act = QAction()
-    act.setText("TZ")
-    self.btnTransZ.setDefaultAction(act)
-    self.btnTransZ.clicked.connect(self.onOrientationClicked)
-    horz_layoutTZ.addWidget(self.sliderTZ)
-    horz_layoutTZ.addWidget(self.btnTransZ)
-
-    # Rot Z
-    horz_layoutRZ = QHBoxLayout()
-    self.sliderRZ = QFloatSlider(Qt.Horizontal,self)
-    self.sliderRZ.setRange(-90.0,90.0,37)
-    self.sliderRZ.setFloatValue(0.0)
-    self.sliderRZ.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    self.btnRotZ = QToolButton()
-    act = QAction()
-    act.setText("RZ")
-    self.btnRotZ.setDefaultAction(act)
-    self.btnRotZ.clicked.connect(self.onOrientationClicked)
-    horz_layoutRZ.addWidget(self.sliderRZ)
-    horz_layoutRZ.addWidget(self.btnRotZ)
-
     horzSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
     self.btnLocal = QCheckBox("local")
     self.btnReset = QPushButton("Reset")
@@ -540,11 +485,37 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout4.addSpacerItem(horzSpacer)
     horz_layout4.addWidget(self.btnReset)
     vert_layout.addItem(horz_layout4)
-    vert_layout.addItem(horz_layout2)
-    vert_layout.addItem(horz_layout3)
 
-    vert_layout.addItem(horz_layoutTZ)
-    vert_layout.addItem(horz_layoutRZ)
+    for i in range(3):
+      layout0 = QHBoxLayout()
+      exec("self.sliderT"+chr(88+i)+"=QFloatSlider(Qt.Horizontal,self)")
+      exec("self.sliderT"+chr(88+i)+".setRange(-10.0, 10.0, 21)")
+      exec("self.sliderT"+chr(88+i)+".setFloatValue(0.0)")
+      exec("self.sliderT"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
+      exec("self.btnTrans"+chr(88+i)+" = QToolButton()")
+      act = QAction()
+      exec("act.setText(\"T"+chr(88+i)+"\")")
+      exec("self.btnTrans"+chr(88+i)+".setDefaultAction(act)")
+      exec("self.btnTrans"+chr(88+i)+".clicked.connect(self.onOrientationClicked)")
+      exec("layout0.addWidget(self.sliderT"+chr(88+i)+")")
+      exec("layout0.addWidget(self.btnTrans"+chr(88+i)+")")
+    
+      layout1 = QHBoxLayout()
+      exec("self.sliderR"+chr(88+i)+" = QFloatSlider(Qt.Horizontal,self)")
+      exec("self.sliderR"+chr(88+i)+".setRange(-90.0,90.0,37)")
+      exec("self.sliderR"+chr(88+i)+".setFloatValue(0.0)")
+      exec("self.sliderR"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
+      exec("self.btnRot"+chr(88+i)+" = QToolButton()")
+      act = QAction()
+      exec("act.setText(\"R"+chr(88+i)+"\")")
+      exec("self.btnRot"+chr(88+i)+".setDefaultAction(act)")
+      exec("self.btnRot"+chr(88+i)+".clicked.connect(self.onOrientationClicked)")
+      exec("layout1.addWidget(self.sliderR"+chr(88+i)+")")
+      exec("layout1.addWidget(self.btnRot"+chr(88+i)+")")
+      vert_layout.addItem(layout0)
+      vert_layout.addItem(layout1)
+        
+
     vert_layout.addItem(horz_layout1)
     self.btnReset.clicked.connect(self.onResetOffset)
 
