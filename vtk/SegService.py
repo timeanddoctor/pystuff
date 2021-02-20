@@ -16,9 +16,9 @@ class SegmentationTask(QObject):
   @pyqtSlot('PyQt_PyObject', 'PyQt_PyObject')    
   def execute(self, arg, trans):
     # Number of Chan-Vese iterations
-    nIter = 8
+    nIter = 20
     std = 1.0 # [mm], original
-    squareSize = 1.0 # [mm]
+    squareSize = 1.5 # [mm]
     
     saveMetaImage = False
     savePNGImage = False

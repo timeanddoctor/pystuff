@@ -11,6 +11,42 @@ can result in a lot of pixels being drawn when the entire mesh is
 shown, so use this power judiciously.
 """
 
+def CloudMeanDist(source, target):
+  # Source contains few points, target contains many
+  locator = vtk.vtkCellLocator()
+  locator.SetDataSet(target)
+  locator.SetNumberOfCellsPerBucket(1)
+  locator.BuildLocator()
+
+  nPoints = source.GetNumberOfPoints()
+  closestp = vtk.vtkPoints()
+  closestp.SetNumberOfPoints(nPoints)
+
+  subId = vtk.reference(0)
+  dist2 = vtk.reference(0.0)
+  cellId = vtk.reference(0) # mutable <-> reference
+  outPoint = [0.0, 0.0, 0.0]
+
+  for i in range(nPoints):
+    locator.FindClosestPoint(source.GetPoint(i),
+                             outPoint,
+                             cellId,
+                             subId,
+                             dist2)
+    closestp.SetPoint(i, outPoint)
+
+  totaldist = 0.0
+  p1 = [0.0, 0.0, 0.0]
+  p2 = [0.0, 0.0, 0.0]
+
+  for i in range(nPoints):
+    # RMS
+    totaldist = totaldist +\
+      vtk.vtkMath.Distance2BetweenPoints(source.GetPoint(i),
+                                         closestp.GetPoint(i))
+  return np.sqrt(totaldist / nPoints)
+
+
 def numpyTypeToVTKType(dtype):
   if dtype == np.int8:
     #define VTK_CHAR            2

@@ -66,6 +66,7 @@ class Viewer2D(QFrame):
     prop = self.overlay.GetProperty()
     renderLinesAsTubes(prop)
     prop.SetColor(red)
+    mapper.ScalarVisibilityOff()
 
     RCW = self.viewer.GetResliceCursorWidget()    
     ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
@@ -110,7 +111,9 @@ class Viewer2D(QFrame):
     vtk.vtkMath.Subtract(upperLeft, lowerLeft, second1)
     tmp = vtk.vtkMath.Distance2BetweenPoints(upperLeft, lowerLeft)
     vtk.vtkMath.MultiplyScalar(second1, 1.0/math.sqrt(tmp))
-    return first1, second1
+    normal1 = vtk.vtkVector3d()
+    vtk.vtkMath.Cross(first1, second1, normal1)
+    return first1, second1, normal1
   def GetScreenTransform(self):
     """
     Get transform from origin to window slice plane
@@ -397,6 +400,11 @@ class Viewer2D(QFrame):
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
 
+  def RemoveContours(self):
+    if self.contourActor is not None:
+      self.viewer.GetRenderWindow().GetInteractor().Disable()
+      self.viewer.GetRenderWindow().GetInteractor().Enable()
+      
   def UpdateContours(self, misalign=None):
     if self.contourActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
@@ -404,6 +412,8 @@ class Viewer2D(QFrame):
       normal = ps.GetNormal()
       origin = ps.GetOrigin()
       if misalign is not None:
+        misalign2 = vtk.vtkTransform()
+        misalign2.DeepCopy(misalign)
         inverse = vtk.vtkTransform()
         inverse.DeepCopy(misalign)
         inverse.Inverse()
@@ -414,19 +424,17 @@ class Viewer2D(QFrame):
         tmp[0] = normal[0]
         tmp[1] = normal[1]
         tmp[2] = normal[2]
-        mat3.MultiplyPoint(tmp,tmp)
+        mat3.MultiplyPoint(tmp, tmp)
+        normal = tmp
       self.plane.SetOrigin(origin)
-      self.plane.SetNormal(tmp)
+      self.plane.SetNormal(normal)
       self.plane.Modified() # TEST
 
-      #self.data.Modified() # 
-      
-      #self.cutEdges.Modified() # TEST      
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
       transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
       transform.PostMultiply()
-      transform.AddObserver('EndEvent', self.test) # TEST
+      # 
       if misalign is not None:
         transform.Concatenate(misalign)
       self.contourActor.SetUserTransform(transform)

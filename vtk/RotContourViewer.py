@@ -3,9 +3,11 @@ import os
 import sys
 from collections import deque
 
+import math
+
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from vtk.util.colors import red, yellow
+from vtk.util.colors import red, yellow, black
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import Qt, QObject, QCoreApplication,\
@@ -13,7 +15,8 @@ from PyQt5.QtCore import Qt, QObject, QCoreApplication,\
 from PyQt5.Qt import QCursor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout,\
   QSplitter, QFrame, QSpacerItem, QPushButton, QToolButton,\
-  QAction, QFileDialog, QApplication,  QSizePolicy, QToolTip
+  QAction, QFileDialog, QApplication,  QSizePolicy, QToolTip,\
+  QCheckBox
 
 defaultFiles = {0 : 'VesselVolumeUncompressed.mhd',
                 1 : 'Connected.vtp'}
@@ -97,15 +100,84 @@ class FourPaneViewer(QMainWindow, ui):
     self.DEFAULT_DIR_KEY = __file__
     self.imgToMeshTransform = vtk.vtkTransform()
     self.imgToMeshTransform.Identity()
+    self.imgToMeshTransform.PostMultiply()
 
   def onOrientationClicked(self):
+    """
+    Blue widget. TODO: Try to actually rotate mesh instead
+    """
     sender = self.sender()
+    local = self.btnLocal.isChecked()
     if sender == self.btnTransX:
       dx = self.sliderTX.getFloatValue()
-      self.imgToMeshTransform.Translate(dx,0.0,0.0)
+      if local:
+        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
+        vtk.vtkMath.MultiplyScalar(vx, dx)
+        self.imgToMeshTransform.Translate(vx[0], vx[1], vx[2])
+      else:
+        self.imgToMeshTransform.Translate(dx,0.0,0.0)
     elif sender == self.btnRotX:
       da = self.sliderRX.getFloatValue()
-      self.imgToMeshTransform.RotateWXYZ(da, 1.0, 0.0, 0.0)
+      if local:
+        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
+        cursorPosition = self.vtk_widgets[2].GetPosition()
+        self.imgToMeshTransform.Translate(-cursorPosition[0],
+                                          -cursorPosition[1],
+                                          -cursorPosition[2])
+        self.imgToMeshTransform.RotateWXYZ(da, vx)
+        self.imgToMeshTransform.Translate(cursorPosition[0],
+                                          cursorPosition[1],
+                                          cursorPosition[2])
+        
+      else:
+        self.imgToMeshTransform.RotateWXYZ(da, 1.0, 0.0, 0.0)
+    elif sender == self.btnTransZ:
+      dz = self.sliderTZ.getFloatValue()
+      if local:
+        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
+        vtk.vtkMath.MultiplyScalar(vn, dz)
+        self.imgToMeshTransform.Translate(vn[0], vn[1], vn[2])
+      else:
+        self.imgToMeshTransform.Translate(0.0,0.0,dz)
+    elif sender == self.btnRotZ:
+      da = self.sliderRZ.getFloatValue()
+      if local:
+        # TODO: Move to origin, rotate, move back
+        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
+        cursorPosition = self.vtk_widgets[2].GetPosition()
+        print(cursorPosition)
+        self.imgToMeshTransform.Translate(-cursorPosition[0],
+                                          -cursorPosition[1],
+                                          -cursorPosition[2])
+        self.imgToMeshTransform.RotateWXYZ(da, vn)
+
+        if 0:
+          # Debug code (cursorPosition is in the corner!!!!)
+          
+          # viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetPosition
+          
+          # Show cursor position in 3D
+          pointSource = vtk.vtkPointSource()
+          pointSource.SetNumberOfPoints(10)
+          pointSource.SetCenter(cursorPosition)
+          pointSource.SetRadius(10.0)
+          pointSource.Update()
+          
+          mapper = vtk.vtkPolyDataMapper()
+          mapper.SetInputConnection(pointSource.GetOutputPort())
+          
+          self.actor = vtk.vtkActor()
+          self.actor.SetMapper(mapper)
+          self.actor.GetProperty().SetColor(red)
+          self.vtk_widgets[2].viewer.GetRenderer().AddActor(self.actor)
+          self.vtk_widgets[2].viewer.Render()
+
+        self.imgToMeshTransform.Translate(cursorPosition[0],
+                                          cursorPosition[1],
+                                          cursorPosition[2])
+      else:
+        self.imgToMeshTransform.RotateWXYZ(da, 0.0, 0.0, 1.0)
+        
     for i in range(3):
       self.vtk_widgets[i].UpdateContours(self.imgToMeshTransform)
     self.vessels.SetUserTransform(self.imgToMeshTransform)
@@ -169,7 +241,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.planeWidget[0].GetDefaultRenderer().AddActor(self.vessels)
 
     for i in range(3):
-      self.vtk_widgets[i].InitializeContour(self.vesselNormals)
+      self.vtk_widgets[i].InitializeContours(self.vesselNormals)
     self.Render()
     
   def loadFile(self, fileName):
@@ -215,6 +287,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.axes = vtk.vtkOrientationMarkerWidget()
     self.axes.SetOrientationMarker( axesActor)
     self.axes.SetInteractor( self.vtk_widgets[3] )
+    self.axes.SetViewport( 0.8, 0.0, 1.0, 0.2)
     #self.planeWidget[0].GetDefaultRenderer().AddActor(axesActor)
     self.axes.EnabledOn()
     self.axes.InteractiveOn()
@@ -222,6 +295,7 @@ class FourPaneViewer(QMainWindow, ui):
     # Enable 3D rendering
     self.vtk_widgets[3].EnableRenderOn()
     # Reset camera for the renderer - otherwise it is set using dummy data
+    #self.planeWidget[0].GetDefaultRenderer().DisplayToWorld()
     self.planeWidget[0].GetDefaultRenderer().ResetCamera()
 
     # Update 3D
@@ -338,6 +412,8 @@ class FourPaneViewer(QMainWindow, ui):
       renderLinesAsTubes(prop)
       pw.SetCursorProperty(prop)
 
+      prop = pw.GetTextProperty()
+      prop.SetColor(black)
       pw.Modified()
       # Set background for 2D views
       for j in range(3):
@@ -398,45 +474,93 @@ class FourPaneViewer(QMainWindow, ui):
 
     horz_layout1.addWidget(self.btnAxial)
     verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-    vert_layout.addItem(verticalSpacer)
+    vert_layout.addSpacerItem(verticalSpacer)
+
+    # Trans X
     horz_layout2 = QHBoxLayout()
-    horz_layout3 = QHBoxLayout()
     self.sliderTX = QFloatSlider(Qt.Horizontal,self)
     self.sliderTX.setRange(-10.0, 10.0, 21)
     self.sliderTX.setFloatValue(0.0)
-
     self.sliderTX.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    
     self.btnTransX = QToolButton()
     act = QAction()
     act.setText("TX")
     self.btnTransX.setDefaultAction(act)
+    self.btnTransX.clicked.connect(self.onOrientationClicked)
+    horz_layout2.addWidget(self.sliderTX)
+    horz_layout2.addWidget(self.btnTransX)
+
+    # Rot X
+    horz_layout3 = QHBoxLayout()
     self.sliderRX = QFloatSlider(Qt.Horizontal,self)
-    self.sliderRX.setRange(-45.0,45.0,91)
+    self.sliderRX.setRange(-90.0,90.0,37)
     self.sliderRX.setFloatValue(0.0)
     self.sliderRX.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    
     self.btnRotX = QToolButton()
     act = QAction()
     act.setText("RX")
     self.btnRotX.setDefaultAction(act)
-
-    self.btnTransX.clicked.connect(self.onOrientationClicked)
     self.btnRotX.clicked.connect(self.onOrientationClicked)
-    
-    horz_layout2.addWidget(self.sliderTX)
-    horz_layout2.addWidget(self.btnTransX)
     horz_layout3.addWidget(self.sliderRX)
     horz_layout3.addWidget(self.btnRotX)
+
+    # Trans Z
+    horz_layoutTZ = QHBoxLayout()
+    self.sliderTZ = QFloatSlider(Qt.Horizontal,self)
+    self.sliderTZ.setRange(-10.0, 10.0, 21)
+    self.sliderTZ.setFloatValue(0.0)
+    self.sliderTZ.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+    self.btnTransZ = QToolButton()
+    act = QAction()
+    act.setText("TZ")
+    self.btnTransZ.setDefaultAction(act)
+    self.btnTransZ.clicked.connect(self.onOrientationClicked)
+    horz_layoutTZ.addWidget(self.sliderTZ)
+    horz_layoutTZ.addWidget(self.btnTransZ)
+
+    # Rot Z
+    horz_layoutRZ = QHBoxLayout()
+    self.sliderRZ = QFloatSlider(Qt.Horizontal,self)
+    self.sliderRZ.setRange(-90.0,90.0,37)
+    self.sliderRZ.setFloatValue(0.0)
+    self.sliderRZ.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+    self.btnRotZ = QToolButton()
+    act = QAction()
+    act.setText("RZ")
+    self.btnRotZ.setDefaultAction(act)
+    self.btnRotZ.clicked.connect(self.onOrientationClicked)
+    horz_layoutRZ.addWidget(self.sliderRZ)
+    horz_layoutRZ.addWidget(self.btnRotZ)
+
+    horzSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+    self.btnLocal = QCheckBox("local")
+    self.btnReset = QPushButton("Reset")
+    horz_layout4 = QHBoxLayout()
+    horz_layout4.addWidget(self.btnLocal)
+    horz_layout4.addSpacerItem(horzSpacer)
+    horz_layout4.addWidget(self.btnReset)
+    vert_layout.addItem(horz_layout4)
     vert_layout.addItem(horz_layout2)
     vert_layout.addItem(horz_layout3)
+
+    vert_layout.addItem(horz_layoutTZ)
+    vert_layout.addItem(horz_layoutRZ)
     vert_layout.addItem(horz_layout1)
+    self.btnReset.clicked.connect(self.onResetOffset)
 
     self.frame.setLayout(vert_layout)
-  def test(self, value):
-    print(value)
-    QToolTip.showText(QCursor.pos(), "%f" % (self.sliderTX.getFloatValue()), None)
-
+  def ResetSliders(self):
+    self.sliderRZ.setFloatValue(0.0)
+    self.sliderRX.setFloatValue(0.0)
+    self.sliderTX.setFloatValue(0.0)
+    self.sliderTZ.setFloatValue(0.0)
+  def onResetOffset(self):
+    self.imgToMeshTransform.Identity()
+    self.ResetSliders()
+    for i in range(3):
+      self.vtk_widgets[i].UpdateContours(self.imgToMeshTransform)
+    self.vessels.SetUserTransform(self.imgToMeshTransform)
+    self.Render()
   def togglePlanes(self, state):
     obj = self.sender()
     index = -1
@@ -518,6 +642,36 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
+  def GetPosition(self):
+    """
+    Position of cursor, not the plane
+    """
+    origin = self.GetResliceCursor().GetCenter()
+    return origin
+  def GetOrientation(self):
+    # Normal can be obtained using self.GetResliceCursor().GetPlane(iDim).GetNormal()
+    renderer = self.viewer.GetRenderer()
+    # Get screen frame
+    coordinate = vtk.vtkCoordinate()
+    coordinate.SetCoordinateSystemToNormalizedDisplay()
+    coordinate.SetValue(0.0, 0.0) # Lower left
+    lowerLeft = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(1.0, 0.0) # Lower right
+    lowerRight = coordinate.GetComputedWorldValue(renderer)
+    coordinate.SetValue(0.0, 1.0) # Upper left
+    upperLeft = coordinate.GetComputedWorldValue(renderer)
+    first1 = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(lowerRight, lowerLeft, first1)
+    tmp = vtk.vtkMath.Distance2BetweenPoints(lowerRight, lowerLeft)
+    vtk.vtkMath.MultiplyScalar(first1, 1.0/math.sqrt(tmp))
+    second1 = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(upperLeft, lowerLeft, second1)
+    tmp = vtk.vtkMath.Distance2BetweenPoints(upperLeft, lowerLeft)
+    vtk.vtkMath.MultiplyScalar(second1, 1.0/math.sqrt(tmp))
+    normal1 = vtk.vtkVector3d()
+    vtk.vtkMath.Cross(first1, second1, normal1)
+    return first1, second1, normal1
+
   def SetInputData(self, data):
     self.viewer.SetInputData(data)
     # Corner annotation, can use <slice>, <slice_pos>, <window_level>
@@ -538,7 +692,7 @@ class Viewer2D(QFrame):
     
     cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
     self.viewer.GetRenderer().AddViewProp(cornerAnnotation)
-  def InitializeContour(self, data):
+  def InitializeContours(self, data):
     # Update contours
     self.plane = vtk.vtkPlane()
     RCW = self.viewer.GetResliceCursorWidget()    
@@ -555,12 +709,12 @@ class Viewer2D(QFrame):
     cutEdges.SetValue(0, 0.5)
           
     # Put together into polylines
-    cutStrips = vtk.vtkStripper()
-    cutStrips.SetInputConnection(cutEdges.GetOutputPort())
-    cutStrips.Update()
+    self.cutStrips = vtk.vtkStripper()
+    self.cutStrips.SetInputConnection(cutEdges.GetOutputPort())
+    self.cutStrips.Update()
 
     edgeMapper = vtk.vtkPolyDataMapper()
-    edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
+    edgeMapper.SetInputConnection(self.cutStrips.GetOutputPort())
           
     self.edgeActor = vtk.vtkActor()
     self.edgeActor.SetMapper(edgeMapper)
@@ -610,12 +764,14 @@ class Viewer2D(QFrame):
         userTransform.Concatenate(transform)
       userTransform.Translate(normal)
       self.edgeActor.SetUserTransform(transform)
-    
   def start(self):
     self.interactor.Initialize()
     self.interactor.Start()
 
 if __name__ == '__main__':
+
+  # Qt::AA_ShareOpenGLContexts using QCoreApplication::setAttribute
+  
   if QApplication.startingUp():
     app = QApplication(sys.argv)
   else:
