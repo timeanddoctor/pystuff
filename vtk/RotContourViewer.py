@@ -16,7 +16,10 @@ from PyQt5.Qt import QCursor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout,\
   QSplitter, QFrame, QSpacerItem, QPushButton, QToolButton,\
   QAction, QFileDialog, QApplication,  QSizePolicy, QToolTip,\
-  QCheckBox
+  QCheckBox, QGroupBox
+
+# TODO: Replace imgToMeshTransform with (misAlign * reAlign)
+#       SliderPressed, SliderMoved, SliderReleased
 
 defaultFiles = {0 : 'VesselVolumeUncompressed.mhd',
                 1 : 'Connected.vtp'}
@@ -63,8 +66,7 @@ class ResliceCallback(object):
         pda.SetPoint2(ps.GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
-        main_window.vtk_widgets[i].UpdateContours(main_window.imgToMeshTransform)
-
+        main_window.vtk_widgets[i].UpdateContours()
     self.render()
   def onEndWindowLevelChanged(self, caller, ev):
     # Colormap is shared, so use widget 0
@@ -83,7 +85,9 @@ class ResliceCallback(object):
       main_window.vtk_widgets[0].viewer.SetColorWindow(wl[0])
       main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
     self.render()
-
+  def onRender(self, caller, ev):
+    print('hello')
+    self.render()
   def render(self):
     # Render views
     for i in range(3):
@@ -102,84 +106,72 @@ class FourPaneViewer(QMainWindow, ui):
     self.imgToMeshTransform.Identity()
     self.imgToMeshTransform.PostMultiply()
     self.vessels = None
+
   def onOrientationClicked(self):
     """
     Blue widget. TODO: Try to actually rotate mesh instead
     """
     sender = self.sender()
     local = self.btnLocal.isChecked()
-    if sender == self.btnTransX:
-      dx = self.sliderTX.getFloatValue()
+
+    widget = self.vtk_widgets[2]
+
+    vx, vy, vn = widget.GetOrientation()
+    cursorPosition = widget.GetPosition()
+
+    if sender in [self.btnRotX, self.btnRotY, self.btnRotZ]:
       if local:
-        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
-        vtk.vtkMath.MultiplyScalar(vx, dx)
-        self.imgToMeshTransform.Translate(vx[0], vx[1], vx[2])
+        rotAxis = {self.btnRotX : vx,
+                   self.btnRotY : vy,
+                   self.btnRotZ : vn}[sender]
       else:
-        self.imgToMeshTransform.Translate(dx,0.0,0.0)
-    elif sender == self.btnRotX:
-      da = self.sliderRX.getFloatValue()
-      if local:
-        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
-        cursorPosition = self.vtk_widgets[2].GetPosition()
-        self.imgToMeshTransform.Translate(-cursorPosition[0],
-                                          -cursorPosition[1],
-                                          -cursorPosition[2])
-        self.imgToMeshTransform.RotateWXYZ(da, vx)
-        self.imgToMeshTransform.Translate(cursorPosition[0],
-                                          cursorPosition[1],
-                                          cursorPosition[2])
+        rotAxis = {self.btnRotX : (1, 0, 0),
+                   self.btnRotY : (0, 1, 0),
+                   self.btnRotZ : (0, 0, 1)}[sender]
         
-      else:
-        self.imgToMeshTransform.RotateWXYZ(da, 1.0, 0.0, 0.0)
-    elif sender == self.btnTransZ:
-      dz = self.sliderTZ.getFloatValue()
+      da = {self.btnRotX : self.sliderRX,
+            self.btnRotY : self.sliderRY,
+            self.btnRotZ : self.sliderRZ}[sender].getFloatValue()
       if local:
-        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
-        vtk.vtkMath.MultiplyScalar(vn, dz)
-        self.imgToMeshTransform.Translate(vn[0], vn[1], vn[2])
-      else:
-        self.imgToMeshTransform.Translate(0.0,0.0,dz)
-    elif sender == self.btnRotZ:
-      da = self.sliderRZ.getFloatValue()
-      if local:
-        # TODO: Move to origin, rotate, move back
-        vx, vy, vn = self.vtk_widgets[2].GetOrientation()
-        cursorPosition = self.vtk_widgets[2].GetPosition()
-        print(cursorPosition)
         self.imgToMeshTransform.Translate(-cursorPosition[0],
                                           -cursorPosition[1],
                                           -cursorPosition[2])
-        self.imgToMeshTransform.RotateWXYZ(da, vn)
-
-        if 0:
-          # Debug code (cursorPosition is in the corner!!!!)
-          
-          # viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetPosition
-          
-          # Show cursor position in 3D
-          pointSource = vtk.vtkPointSource()
-          pointSource.SetNumberOfPoints(10)
-          pointSource.SetCenter(cursorPosition)
-          pointSource.SetRadius(10.0)
-          pointSource.Update()
-          
-          mapper = vtk.vtkPolyDataMapper()
-          mapper.SetInputConnection(pointSource.GetOutputPort())
-          
-          self.actor = vtk.vtkActor()
-          self.actor.SetMapper(mapper)
-          self.actor.GetProperty().SetColor(red)
-          self.vtk_widgets[2].viewer.GetRenderer().AddActor(self.actor)
-          self.vtk_widgets[2].viewer.Render()
-
+        self.imgToMeshTransform.RotateWXYZ(da, rotAxis)
         self.imgToMeshTransform.Translate(cursorPosition[0],
                                           cursorPosition[1],
                                           cursorPosition[2])
       else:
-        self.imgToMeshTransform.RotateWXYZ(da, 0.0, 0.0, 1.0)
-        
+        self.imgToMeshTransform.RotateWXYZ(da,
+                                           rotAxis[0],
+                                           rotAxis[1],
+                                           rotAxis[2])
+    elif sender in [self.btnTransX, self.btnTransY, self.btnTransZ]:
+      dxyz = {self.btnTransX : self.sliderTX,
+              self.btnTransY : self.sliderTY,
+              self.btnTransZ : self.sliderTZ}[sender].getFloatValue()
+
+      if local:
+        axis = {self.btnTransX : vx,
+                self.btnTransY : vy,
+                self.btnTransZ : vn}[sender]
+      else:
+        axis = {self.btnTransX : (1, 0, 0),
+                self.btnTransY : (0, 1, 0),
+                self.btnTransZ : (0, 0, 1)}[sender]
+
+      if local:
+        vtk.vtkMath.MultiplyScalar(axis, dxyz)
+        self.imgToMeshTransform.Translate(axis[0], axis[1], axis[2])
+      else:
+        self.imgToMeshTransform.Translate(axis[0]*dxyz,
+                                          axis[1]*dxyz,
+                                          axis[2]*dxyz)
+
+    #test = vtk.vtkTransform()
+    #test.Translate(0.2,10,17)
+    #self.imgToMeshTransform.Concatenate(test)
     for i in range(3):
-      self.vtk_widgets[i].UpdateContours(self.imgToMeshTransform)
+      self.vtk_widgets[i].UpdateContours()#self.imgToMeshTransform)
     if self.vessels is not None:
       self.vessels.SetUserTransform(self.imgToMeshTransform)
     self.Render()
@@ -243,6 +235,8 @@ class FourPaneViewer(QMainWindow, ui):
 
     for i in range(3):
       self.vtk_widgets[i].InitializeContours(self.vesselNormals)
+      self.vtk_widgets[i].SetTransform(self.imgToMeshTransform)
+
     self.Render()
     
   def loadFile(self, fileName):
@@ -456,6 +450,8 @@ class FourPaneViewer(QMainWindow, ui):
     self.vtk_panel.setLayout(horz_layout0)
 
     vert_layout = QVBoxLayout()
+
+    # Sagittal/Coronal/Axial planes
     horz_layout1 = QHBoxLayout()
     self.btnSagittal = QPushButton("S")
     self.btnSagittal.setCheckable(True)
@@ -468,24 +464,35 @@ class FourPaneViewer(QMainWindow, ui):
     self.btnAxial = QPushButton("A")
     self.btnAxial.setCheckable(True)
     self.btnAxial.setChecked(True)
+    horz_layout1.addWidget(self.btnAxial)
 
     self.btnSagittal.clicked.connect(self.togglePlanes)
     self.btnCoronal.clicked.connect(self.togglePlanes)
     self.btnAxial.clicked.connect(self.togglePlanes)
 
-    horz_layout1.addWidget(self.btnAxial)
-    verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+    verticalSpacer = QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
     vert_layout.addSpacerItem(verticalSpacer)
 
-    horzSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+    # Misalignment
+    
+    # Local and reset
+    horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
     self.btnLocal = QCheckBox("local")
     self.btnReset = QPushButton("Reset")
+    self.btnReset.clicked.connect(self.onResetOffset)
+
+    # Misalignment sliders
     horz_layout4 = QHBoxLayout()
     horz_layout4.addWidget(self.btnLocal)
     horz_layout4.addSpacerItem(horzSpacer)
     horz_layout4.addWidget(self.btnReset)
-    vert_layout.addItem(horz_layout4)
+    
+    groupBox = QGroupBox("Misalignment")
+    vert_layout.addWidget(groupBox)
+    mis_layout = QVBoxLayout()
 
+    mis_layout.addItem(horz_layout4)
+    
     for i in range(3):
       layout0 = QHBoxLayout()
       exec("self.sliderT"+chr(88+i)+"=QFloatSlider(Qt.Horizontal,self)")
@@ -512,14 +519,74 @@ class FourPaneViewer(QMainWindow, ui):
       exec("self.btnRot"+chr(88+i)+".clicked.connect(self.onOrientationClicked)")
       exec("layout1.addWidget(self.sliderR"+chr(88+i)+")")
       exec("layout1.addWidget(self.btnRot"+chr(88+i)+")")
-      vert_layout.addItem(layout0)
-      vert_layout.addItem(layout1)
-        
+      mis_layout.addItem(layout0)
+      mis_layout.addItem(layout1)
+    groupBox.setLayout(mis_layout)
 
+    # Positioning
+
+    
+    # Need steppers as well
+    hlayout = QHBoxLayout()
+    self.sliderMX = QFloatSlider(Qt.Horizontal,self)
+    self.sliderMX.setRange(-10.0,10.0,21)
+    self.sliderMX.setFloatValue(0.0)
+    self.sliderMX.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+    self.sliderMX.sliderPressed.connect(self.onSliderPressed)
+    self.sliderMX.sliderReleased.connect(self.onSliderReleased)
+
+    # Display value changed
+
+    hlayout.addWidget(self.sliderMX)
+    vert_layout.addItem(hlayout)
+      
     vert_layout.addItem(horz_layout1)
-    self.btnReset.clicked.connect(self.onResetOffset)
 
     self.frame.setLayout(vert_layout)
+
+  def onSliderPressed(self):
+    self.lort = self.sliderMX.getFloatValue()
+  def onSliderReleased(self):
+    fval = self.sliderMX.getFloatValue() - self.lort
+    print("%f" % (fval))
+
+    origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
+    normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(2).GetNormal()
+
+    newOrigin = (origin[0]+fval*normal[0], origin[1]+fval*normal[1], origin[2]+fval*normal[2])
+
+    target = self.vtk_widgets[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
+    
+    for i in range(3):
+      target.GetPlane(i).SetOrigin(newOrigin)
+
+    # Do we need to set center
+    for i in range(3):
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor().SetCenter(newOrigin)
+
+    
+    self.cb.onResliceAxesChanged(self.vtk_widgets[2].viewer.GetResliceCursorWidget(),vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent)
+  def onSlideChanged(self, fval):
+    # Normal can be obtained using self.GetResliceCursor().GetPlane(iDim).GetNormal()
+
+    # main_window.viewUS[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor() GetPlane(i).SetNormal SetOrigin
+    # SetCenter
+
+    # Wrong should be absolute
+    origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
+    normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(2).GetNormal()
+
+    newOrigin = (origin[0]+fval*normal[0], origin[1]+fval*normal[1], origin[2]+fval*normal[2])
+
+    target = self.vtk_widgets[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
+    
+    for i in range(3):
+      target.GetPlane(i).SetOrigin(newOrigin)
+
+    # Do we need to set center
+    for i in range(3):
+      self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor().SetCenter(newOrigin)
+    self.Render()
   def ResetSliders(self):
     self.sliderRZ.setFloatValue(0.0)
     self.sliderRX.setFloatValue(0.0)
@@ -529,7 +596,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.imgToMeshTransform.Identity()
     self.ResetSliders()
     for i in range(3):
-      self.vtk_widgets[i].UpdateContours(self.imgToMeshTransform)
+      self.vtk_widgets[i].UpdateContours()
     self.vessels.SetUserTransform(self.imgToMeshTransform)
     self.Render()
   def togglePlanes(self, state):
@@ -563,7 +630,7 @@ class FourPaneViewer(QMainWindow, ui):
       rcw.AddObserver(vtk.vtkResliceCursorWidget.WindowLevelEvent, self.cb.onWindowLevelChanged)
       rcw.AddObserver(vtk.vtkResliceCursorWidget.ResliceThicknessChangedEvent, self.cb.onWindowLevelChanged)
       rcw.AddObserver(vtk.vtkResliceCursorWidget.ResetCursorEvent, self.cb.onResliceAxesChanged)
-      # Ignored after loading data (why)
+      # Ignored after loading data, the interactors are no longer used
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
       self.vtk_widgets[i].viewer.GetInteractorStyle().AddObserver('EndWindowLevelEvent', self.cb.onEndWindowLevelChanged)
       self.planeWidget[i].AddObserver(vtk.vtkCommand.WindowLevelEvent, self.cb.onWindowLevelChanged)
@@ -596,6 +663,12 @@ class Viewer2D(QFrame):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self)
     self.edgeActor = None
+
+    self.trans = None    # Misalignment
+    self.invTrans = None # Inverse
+    
+    self.adjustment = vtk.vtkTransform() # Move in front
+    
     self.iDim = iDim
     self.layout = QHBoxLayout(self)
     self.layout.addWidget(interactor)
@@ -673,15 +746,15 @@ class Viewer2D(QFrame):
     self.plane.SetNormal(normal)
 
     # Generate line segments
-    cutEdges = vtk.vtkCutter()
-    cutEdges.SetInputConnection(main_window.vesselNormals.GetOutputPort())
-    cutEdges.SetCutFunction(self.plane)
-    cutEdges.GenerateCutScalarsOff()
-    cutEdges.SetValue(0, 0.5)
+    self.cutEdges = vtk.vtkCutter()
+    self.cutEdges.SetInputConnection(main_window.vesselNormals.GetOutputPort())
+    self.cutEdges.SetCutFunction(self.plane)
+    self.cutEdges.GenerateCutScalarsOff()
+    self.cutEdges.SetValue(0, 0.5)
           
     # Put together into polylines
     self.cutStrips = vtk.vtkStripper()
-    self.cutStrips.SetInputConnection(cutEdges.GetOutputPort())
+    self.cutStrips.SetInputConnection(self.cutEdges.GetOutputPort())
     self.cutStrips.Update()
 
     edgeMapper = vtk.vtkPolyDataMapper()
@@ -707,13 +780,61 @@ class Viewer2D(QFrame):
   def GetResliceCursor(self):
     return self.viewer.GetResliceCursor()
 
-  def UpdateContours(self, transform=None):
+# TODO: Figure out pipeline
+
+# Proper way would be to define pipeline, which
+# updates when orientation is changed
+
+# Try with a method SetTransform and store inverse
+
+  def SetTransform(self, tf):
+    self.trans = tf
+    self.invTrans = tf.GetInverse()
+    if 0:
+      self.edgeActor.SetUserTransform(tf)
+    else:
+      # New way using extra adjustment
+      tmp = vtk.vtkTransform()
+      tmp.PostMultiply()
+      tmp.Concatenate(tf)
+      tmp.Concatenate(self.adjustment)
+      self.edgeActor.SetUserTransform(tmp)
+
+  def UpdateContours(self):
     if self.edgeActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
       origin = ps.GetOrigin()
       normal = ps.GetNormal()
+      # TEST use cursor instead (works)
+      #origin = self.GetResliceCursor().GetCenter()
+      #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
+      if self.trans is not None:
+        origin = self.invTrans.TransformPoint(origin)
+        cutNormal = self.invTrans.TransformVector(normal)
+        
+      self.plane.SetOrigin(origin)
+      self.plane.SetNormal(cutNormal)
+      self.plane.Modified()
 
+      self.cutEdges.Update()
+
+      # Move in front of image (z-buffer)
+      self.adjustment.Identity()
+      self.adjustment.Translate(normal)
+
+      # TEST this
+      main_window.vesselNormals.Modified()
+    
+  def UpdateContoursOld(self, transform=None):
+    if self.edgeActor is not None:
+      RCW = self.viewer.GetResliceCursorWidget()    
+      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+      origin = ps.GetOrigin()
+      normal = ps.GetNormal()
+      # TEST use cursor instead (works)
+      #origin = self.GetResliceCursor().GetCenter()
+      #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
       if transform is not None:
         # Transform - apply inverse transform to origin and normal
         inv = vtk.vtkTransform()
@@ -721,7 +842,6 @@ class Viewer2D(QFrame):
         inv.Inverse()
         origin = inv.TransformPoint(origin)
         cutNormal = inv.TransformVector(normal)
-        # TODO: Transform vector normal
         
       self.plane.SetOrigin(origin)
       self.plane.SetNormal(cutNormal)
@@ -734,7 +854,11 @@ class Viewer2D(QFrame):
       if transform is not None:
         userTransform.Concatenate(transform)
       userTransform.Translate(normal)
-      self.edgeActor.SetUserTransform(transform)
+      self.edgeActor.SetUserTransform(userTransform)
+
+# TODO: Experiment setting transform once and only modify
+# usertransform in callback
+
   def start(self):
     self.interactor.Initialize()
     self.interactor.Start()
