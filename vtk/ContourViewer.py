@@ -377,9 +377,7 @@ class FourPaneViewer(QMainWindow, ui):
     textActor4.SetMapper(textMapper4)
     textActor4.SetScale(scale)
     textActor4.GetProperty().SetColor(1,0,0)
-    #textActor4.AddPosition(10.0, 30.0, -0.5) # Last is out of plane (only X)
     bounds = textActor4.GetBounds()
-    
     textActor4.AddPosition(-margin+imageSize[1]+bounds[1], bounds[3]-bounds[2], -0.5) # use for no flip (dep on width)
     textActors.append(textActor4)
       
@@ -398,8 +396,9 @@ class FourPaneViewer(QMainWindow, ui):
     textActor5.GetProperty().SetColor(0,1,0)
     #textActor5.AddPosition(20.0, 80.0, -0.5) # Last is out of plane
     bounds = textActor5.GetBounds()
-    # possible bug here
-    textActor5.AddPosition(-margin+imageSize[0]+bounds[1], bounds[1]-bounds[0], -0.5)
+    # possible bug here, why not 3 - 2 and imageSize[2]
+    print(bounds)
+    textActor5.AddPosition(-margin+imageSize[0]+bounds[1], bounds[3]-bounds[2], -0.5)
     textActors.append(textActor5)
       
     text6 = vtk.vtkVectorText()
