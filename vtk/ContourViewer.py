@@ -175,7 +175,7 @@ class FourPaneViewer(QMainWindow, ui):
     super(FourPaneViewer, self).__init__()
     self.setup()
     self.DEFAULT_DIR_KEY = "ContourViewer.py"
-
+    self.planeTextActors = []
   def onLoadClicked(self, fileType):
     mySettings = QSettings()
     fileDir = mySettings.value(self.DEFAULT_DIR_KEY)
@@ -243,6 +243,10 @@ class FourPaneViewer(QMainWindow, ui):
     reader.Update()
     imageDims = reader.GetOutput().GetDimensions()
 
+    ren = self.planeWidget[0].GetDefaultRenderer()
+    for planeTextActor in self.planeTextActors:
+      ren.RemoveViewProp(planeTextActor)
+    
     # Disable renderers and widgets
     for i in range(3):
       self.vtk_widgets[i].viewer.GetInteractor().EnableRenderOff()
@@ -265,17 +269,6 @@ class FourPaneViewer(QMainWindow, ui):
       self.planeWidget[i].On()
       self.planeWidget[i].InteractionOn()
       
-    # Add cube
-    # Right Posterior Superior
-    colors = vtk.vtkNamedColors()
-    xyzLabels = ['X', 'Y', 'Z']
-    scale = (1.5, 1.5, 1.5)
-    axes2 = MakeCubeActor(scale, xyzLabels, colors)
-    self.om2 = vtk.vtkOrientationMarkerWidget()
-    self.om2.SetOrientationMarker(axes2)
-    # Position lower right in the viewport.
-    self.om2.SetInteractor(self.vtk_widgets[3])
-    self.om2.SetViewport(0.75, 0, 1.0, 0.25)
     self.om2.EnabledOn()
     self.om2.InteractiveOn()
 
@@ -305,16 +298,13 @@ class FourPaneViewer(QMainWindow, ui):
                  spacing[1]*imageDims[1],
 
                  spacing[2]*imageDims[2])
-
     
-    actors = self.AddTextToPlanes(imageSize,scale0=imageSize[0]/30.0)
+    self.planeTextActors = self.AddTextToPlanes(imageSize,scale0=imageSize[0]/30.0)
     
     ren = self.planeWidget[0].GetDefaultRenderer()
-    for i in range(len(actors)):
-      actors[i].SetUserMatrix(self.planeWidget[i % 3].GetResliceAxes())
-      ren.AddViewProp(actors[i])
-
-
+    for i in range(len(self.planeTextActors)):
+      self.planeTextActors[i].SetUserMatrix(self.planeWidget[i % 3].GetResliceAxes())
+      ren.AddViewProp(self.planeTextActors[i])
       
   def AddTextToPlanes(self, imageSize, scale0=15.0):
     # Size is in [mm]
@@ -409,7 +399,8 @@ class FourPaneViewer(QMainWindow, ui):
     textActor5.GetProperty().SetColor(0,1,0)
     #textActor5.AddPosition(20.0, 80.0, -0.5) # Last is out of plane
     bounds = textActor5.GetBounds()
-    textActor5.AddPosition(-margin+imageSize[0]+bounds[1], bounds[3]-bounds[2], -0.5)
+    # possible bug here
+    textActor5.AddPosition(-margin+imageSize[0]+bounds[1], bounds[1]-bounds[0], -0.5)
     textActors.append(textActor5)
       
     text6 = vtk.vtkVectorText()
@@ -560,6 +551,17 @@ class FourPaneViewer(QMainWindow, ui):
     cornerAnnotation.GetTextProperty().SetColor( 1, 1, 1 )
     cornerAnnotation.SetWindowLevel(self.vtk_widgets[0].viewer.GetWindowLevel())
     ren.AddViewProp(cornerAnnotation)
+
+    # Create cube, Right Anterior Superior
+    colors = vtk.vtkNamedColors()
+    xyzLabels = ['X', 'Y', 'Z']
+    scale = (1.5, 1.5, 1.5)
+    axes2 = MakeCubeActor(scale, xyzLabels, colors)
+    self.om2 = vtk.vtkOrientationMarkerWidget()
+    self.om2.SetOrientationMarker(axes2)
+    # Position lower right in the viewport.
+    self.om2.SetInteractor(self.vtk_widgets[3])
+    self.om2.SetViewport(0.75, 0, 1.0, 0.25)
     
     self.establishCallbacks()
 
