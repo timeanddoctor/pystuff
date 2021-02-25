@@ -367,8 +367,7 @@ class FourPaneViewer(QMainWindow, ui):
     text4 = vtk.vtkVectorText()
     text4.SetText("Sagittal\nPlane\n\nRight")
     trnf4 = vtk.vtkTransform()
-    trnf4.RotateZ(180) # uncomment for no flip
-    trnf4.RotateX(180) # Original, easy since offset depends only on text size
+    trnf4.RotateY(180)
     tpdPlane4 = vtk.vtkTransformPolyDataFilter()
     tpdPlane4.SetTransform(trnf4)
     tpdPlane4.SetInputConnection(text4.GetOutputPort())
