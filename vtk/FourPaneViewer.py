@@ -260,13 +260,16 @@ class FourPaneViewer(QMainWindow, ui):
       pw.SetCursorProperty(prop)
 
       pw.Modified()
+      self.planeWidget.append(pw)
+    for i in range(3):
+      color = [0.0, 0.0, 0.0]
+      color[i] = 1
       # Set background for 2D views
       for j in range(3):
         color[j] = color[j] / 4.0
       self.vtk_widgets[i].viewer.GetRenderer().SetBackground(color)
       self.vtk_widgets[i].interactor.Disable()
 
-      self.planeWidget.append(pw)
 
     self.establishCallbacks()
 
@@ -375,6 +378,7 @@ if __name__ == '__main__':
   main_window = FourPaneViewer()
   main_window.show()
   main_window.initialize()
+  main_window.loadFile('c:/github/fis/data/Abdomen/CT-Abdomen.mhd')
   sys.exit(app.exec_())
 
 # Local variables: #
