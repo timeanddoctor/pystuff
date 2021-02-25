@@ -18,6 +18,9 @@ ui_file = os.path.join(os.path.dirname(__file__), 'ContourViewer.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
+oldWay = True
+#oldWay = False
+
 def hexCol(s):
   if isinstance(s,str):
     if "#" in s:
@@ -712,9 +715,18 @@ class Viewer2D(QFrame):
     self.plane = vtk.vtkPlane()
     RCW = self.viewer.GetResliceCursorWidget()    
     ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
-    self.plane.SetOrigin(ps.GetOrigin())
     normal = ps.GetNormal()
+    origin = ps.GetOrigin()
+
+    self.plane.SetOrigin(origin)
     self.plane.SetNormal(normal)
+
+    if not oldWay:
+      self.plane.SetOrigin(0,0,0)
+      self.plane.SetNormal(0,0,1)
+      self.tmp = vtk.vtkTransform()
+      self.tmp.SetMatrix(main_window.planeWidget[self.iDim].GetResliceAxes())
+      self.plane.SetTransform(self.tmp)
 
     # Generate line segments
     cutEdges = vtk.vtkCutter()
@@ -751,16 +763,20 @@ class Viewer2D(QFrame):
     return self.viewer.GetResliceCursor()
   def UpdateContour(self):
     if self.edgeActor is not None:
-      RCW = self.viewer.GetResliceCursorWidget()    
-      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
-      self.plane.SetOrigin(ps.GetOrigin())
-      normal = ps.GetNormal()
-      self.plane.SetNormal(normal)
-      # Move in front of image (z-buffer)
-      transform = vtk.vtkTransform()
-      transform.PostMultiply()
-      transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
-      self.edgeActor.SetUserTransform(transform)
+      if oldWay:
+        RCW = self.viewer.GetResliceCursorWidget()    
+        ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+        self.plane.SetOrigin(ps.GetOrigin())
+        normal = ps.GetNormal()
+        self.plane.SetNormal(normal)
+        # Move in front of image (z-buffer)
+        transform = vtk.vtkTransform()
+        transform.PostMultiply()
+        transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
+        self.edgeActor.SetUserTransform(transform)
+      else:
+        # Not working
+        self.plane.Modified()
     
   def start(self):
     self.interactor.Initialize()

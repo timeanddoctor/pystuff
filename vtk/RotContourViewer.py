@@ -66,6 +66,7 @@ class ResliceCallback(object):
         pda.SetPoint2(ps.GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
+        # Needed to trigger new intersection and move in front
         main_window.vtk_widgets[i].UpdateContours()
     self.render()
 

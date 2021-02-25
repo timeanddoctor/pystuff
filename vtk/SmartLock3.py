@@ -104,6 +104,7 @@ class ResliceCallback(object):
         pda.SetPoint2(ps.GetPoint2())
         # If the reslice plane has modified, update it on the 3D widget
         self.IPW[i].UpdatePlacement()
+        # TEST disable
         main_window.stackCT.widget(i).UpdateContours()
     self.render() # TODO: Consider partly rendering
 

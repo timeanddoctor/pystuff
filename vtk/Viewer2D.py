@@ -427,12 +427,14 @@ class Viewer2D(QFrame):
       self.contourActor.SetUserTransform(tmp)
 
   def UpdateContours(self):
+    # Alternatively, one could transform the the vtkPlane using
+    # GetResliceAxes from vtkImageSlicer
     if self.contourActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
       origin = ps.GetOrigin()
       normal = ps.GetNormal()
-      # TEST use cursor instead (works)
+      # Same effect
       #origin = self.GetResliceCursor().GetCenter()
       #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
       if self.trans is not None:
