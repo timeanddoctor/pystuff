@@ -68,6 +68,7 @@ class ResliceCallback(object):
         self.IPW[i].UpdatePlacement()
         main_window.vtk_widgets[i].UpdateContours()
     self.render()
+
   def onEndWindowLevelChanged(self, caller, ev):
     # Colormap is shared, so use widget 0
     viewer = main_window.vtk_widgets[0].viewer
@@ -97,15 +98,21 @@ class ResliceCallback(object):
   def Render(self, caller, ev):
     # This may help on the missing render calls!!
     self.render()
+
 class FourPaneViewer(QMainWindow, ui):
   def __init__(self):
     super(FourPaneViewer, self).__init__()
+    self.lort = 0.0
     self.setup()
     self.DEFAULT_DIR_KEY = __file__
     self.imgToMeshTransform = vtk.vtkTransform()
     self.imgToMeshTransform.Identity()
     self.imgToMeshTransform.PostMultiply()
     self.vessels = None
+
+    self.startX = 0.0
+    self.startY = 0.0
+    self.startZ = 0.0
 
   def onOrientationClicked(self):
     """
@@ -474,6 +481,17 @@ class FourPaneViewer(QMainWindow, ui):
     vert_layout.addSpacerItem(verticalSpacer)
 
     # Misalignment
+    self.createMisAlignment(vert_layout)
+    
+    # Positioning
+    self.createMovement(vert_layout)
+
+    self.frame.setLayout(vert_layout)
+  def createMisAlignment(self, vert_layout):
+    # Misalignment
+    groupBox = QGroupBox("Misalignment")
+    vert_layout.addWidget(groupBox)
+    mis_layout = QVBoxLayout()
     
     # Local and reset
     horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -486,11 +504,6 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout4.addWidget(self.btnLocal)
     horz_layout4.addSpacerItem(horzSpacer)
     horz_layout4.addWidget(self.btnReset)
-    
-    groupBox = QGroupBox("Misalignment")
-    vert_layout.addWidget(groupBox)
-    mis_layout = QVBoxLayout()
-
     mis_layout.addItem(horz_layout4)
     
     for i in range(3):
@@ -523,70 +536,84 @@ class FourPaneViewer(QMainWindow, ui):
       mis_layout.addItem(layout1)
     groupBox.setLayout(mis_layout)
 
-    # Positioning
-
+  def createMovement(self, inLayout):
+    global startX, startY, startZ
+    groupBox = QGroupBox("Movement")
+    inLayout.addWidget(groupBox)
+    groupLayout = QVBoxLayout()
     
-    # Need steppers as well
-    hlayout = QHBoxLayout()
-    self.sliderMX = QFloatSlider(Qt.Horizontal,self)
-    self.sliderMX.setRange(-10.0,10.0,21)
-    self.sliderMX.setFloatValue(0.0)
-    self.sliderMX.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-    self.sliderMX.sliderPressed.connect(self.onSliderPressed)
-    self.sliderMX.sliderReleased.connect(self.onSliderReleased)
+    # Local and reset
+    horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
-    # Display value changed
+    # TODO: Return values
+    self.btnLocal1 = QCheckBox("local")
+    self.btnReset1 = QPushButton("Reset")
+    self.btnReset1.clicked.connect(self.onResetMovement)
 
-    hlayout.addWidget(self.sliderMX)
-    vert_layout.addItem(hlayout)
-      
-    vert_layout.addItem(horz_layout1)
+    # Movement sliders
+    layout = QHBoxLayout()
+    layout.addWidget(self.btnLocal1)
+    layout.addSpacerItem(horzSpacer)
+    layout.addWidget(self.btnReset1)
+    groupLayout.addItem(layout)
 
-    self.frame.setLayout(vert_layout)
+    for i in range(3):
+      layout0 = QHBoxLayout()
+      exec("self.sliderM"+chr(88+i)+"=QFloatSlider(Qt.Horizontal,self)")
+      exec("self.sliderM"+chr(88+i)+".setRange(-20.0, 20.0, 41)")
+      exec("self.sliderM"+chr(88+i)+".setFloatValue(0.0)")
+      exec("self.sliderM"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
+      exec("self.sliderM"+chr(88+i)+".sliderPressed.connect(lambda self=self: self.onSliderPressed(" + "%d" % (i) + "))")
+      exec("self.sliderM"+chr(88+i)+".sliderReleased.connect(lambda self=self: self.onMove(" + "%d" % (i) + "))")
+      exec("layout0.addWidget(self.sliderM"+chr(88+i)+")")
+      groupLayout.addItem(layout0)
 
-  def onSliderPressed(self):
-    self.lort = self.sliderMX.getFloatValue()
-  def onSliderReleased(self):
-    fval = self.sliderMX.getFloatValue() - self.lort
-    print("%f" % (fval))
+      # TODO: Rotate movement
+      #layout1 = QHBoxLayout()
+      #exec("self.sliderR"+chr(88+i)+" = QFloatSlider(Qt.Horizontal,self)")
+      #exec("self.sliderR"+chr(88+i)+".setRange(-90.0,90.0,37)")
+      #exec("self.sliderR"+chr(88+i)+".setFloatValue(0.0)")
+      #exec("self.sliderR"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
+      #exec("self.btnRot"+chr(88+i)+" = QToolButton()")
+      #exec("layout1.addWidget(self.sliderR"+chr(88+i)+")")
+      #layout.addItem(layout1)
+    groupBox.setLayout(groupLayout)
+  def onSliderPressed(self, dim):
+    startVal = {0 : self.startX,
+              1 : self.startY,
+              2 : self.startZ}[dim]
+    startVal = self.sender().getFloatValue()
 
+  def onResetMovement(self):
+    print("Reset movement")
+    
+  def onMove(self, dim):
+    startVal = {0 : self.startX,
+              1 : self.startY,
+              2 : self.startZ}[dim]
+    diff = self.sender().getFloatValue() - startVal
+    
     origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
-    normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(2).GetNormal()
+    normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(dim).GetNormal()
 
-    newOrigin = (origin[0]+fval*normal[0], origin[1]+fval*normal[1], origin[2]+fval*normal[2])
+    # Move origin
+    newOrigin = (origin[0]+diff*normal[0], origin[1]+diff*normal[1], origin[2]+diff*normal[2])
 
+    # Set origin of cursor object
     target = self.vtk_widgets[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
-    
     for i in range(3):
       target.GetPlane(i).SetOrigin(newOrigin)
 
-    # Do we need to set center
+    # Set center for all widgets
     for i in range(3):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor().SetCenter(newOrigin)
 
-    
-    self.cb.onResliceAxesChanged(self.vtk_widgets[2].viewer.GetResliceCursorWidget(),vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent)
-  def onSlideChanged(self, fval):
-    # Normal can be obtained using self.GetResliceCursor().GetPlane(iDim).GetNormal()
+    # Execute callback to sync other 2D views and 3D
+    self.cb.onResliceAxesChanged(self.vtk_widgets[dim].viewer.GetResliceCursorWidget(),vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent)
 
-    # main_window.viewUS[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor() GetPlane(i).SetNormal SetOrigin
-    # SetCenter
+    # Reset slider
+    self.sender().setFloatValue(0.0)
 
-    # Wrong should be absolute
-    origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
-    normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(2).GetNormal()
-
-    newOrigin = (origin[0]+fval*normal[0], origin[1]+fval*normal[1], origin[2]+fval*normal[2])
-
-    target = self.vtk_widgets[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
-    
-    for i in range(3):
-      target.GetPlane(i).SetOrigin(newOrigin)
-
-    # Do we need to set center
-    for i in range(3):
-      self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor().SetCenter(newOrigin)
-    self.Render()
   def ResetSliders(self):
     self.sliderRZ.setFloatValue(0.0)
     self.sliderRX.setFloatValue(0.0)
@@ -794,7 +821,7 @@ class Viewer2D(QFrame):
       self.edgeActor.SetUserTransform(tf)
     else:
       # New way using extra adjustment
-      tmp = vtk.vtkTransform()
+      tmp = vtk.vtkTransform() # Stored as a user transform
       tmp.PostMultiply()
       tmp.Concatenate(tf)
       tmp.Concatenate(self.adjustment)
@@ -824,37 +851,8 @@ class Viewer2D(QFrame):
       self.adjustment.Translate(normal)
 
       # TEST this
-      main_window.vesselNormals.Modified()
+      #main_window.vesselNormals.Modified()
     
-  def UpdateContoursOld(self, transform=None):
-    if self.edgeActor is not None:
-      RCW = self.viewer.GetResliceCursorWidget()    
-      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
-      origin = ps.GetOrigin()
-      normal = ps.GetNormal()
-      # TEST use cursor instead (works)
-      #origin = self.GetResliceCursor().GetCenter()
-      #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
-      if transform is not None:
-        # Transform - apply inverse transform to origin and normal
-        inv = vtk.vtkTransform()
-        inv.DeepCopy(transform)
-        inv.Inverse()
-        origin = inv.TransformPoint(origin)
-        cutNormal = inv.TransformVector(normal)
-        
-      self.plane.SetOrigin(origin)
-      self.plane.SetNormal(cutNormal)
-      self.plane.Modified()
-
-      # Move in front of image (z-buffer)
-      userTransform = vtk.vtkTransform()
-      userTransform.Identity()
-      userTransform.PostMultiply()
-      if transform is not None:
-        userTransform.Concatenate(transform)
-      userTransform.Translate(normal)
-      self.edgeActor.SetUserTransform(userTransform)
 
 # TODO: Experiment setting transform once and only modify
 # usertransform in callback

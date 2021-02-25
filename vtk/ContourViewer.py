@@ -522,6 +522,7 @@ class Viewer2D(QFrame):
       self.plane.SetNormal(normal)
       # Move in front of image (z-buffer)
       transform = vtk.vtkTransform()
+      transform.PostMultiply()
       transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
       self.edgeActor.SetUserTransform(transform)
     

@@ -23,6 +23,10 @@ class Viewer2D(QFrame):
     super(Viewer2D, self).__init__(parent)
     interactor = QVTKRenderWindowInteractor(self) # This is a QWidget
     self.contourActor = None # Actor for contours
+
+    self.trans = None    # Misalignment
+    self.invTrans = None # Inverse
+    
     self.overlay   = None    # Actor for segmentation contours
     self.wrongContourActor = None
     self.iDim = iDim      # Slice dimensions
@@ -35,6 +39,9 @@ class Viewer2D(QFrame):
     layout.setContentsMargins(0, 0, 0, 0)
     self.setLayout(layout)
 
+    self.adjustment = vtk.vtkTransform() # Move in front
+
+    
     self.viewer = vtk.vtkResliceImageViewer()
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
@@ -344,6 +351,7 @@ class Viewer2D(QFrame):
 
   def InitializeContours(self, data, color=yellow):
     self.data = data
+
     # Disable interactor
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
@@ -360,15 +368,15 @@ class Viewer2D(QFrame):
     self.plane.SetNormal(normal)
 
     # Generate line segments
-    cutEdges = vtk.vtkCutter()
-    cutEdges.SetInputConnection(self.data.GetOutputPort())#main_window.vesselNormals.GetOutputPort())
-    cutEdges.SetCutFunction(self.plane)
-    cutEdges.GenerateCutScalarsOff()
-    cutEdges.SetValue(0, 0.5)
+    self.cutEdges = vtk.vtkCutter()
+    self.cutEdges.SetInputConnection(self.data.GetOutputPort())#main_window.vesselNormals.GetOutputPort())
+    self.cutEdges.SetCutFunction(self.plane)
+    self.cutEdges.GenerateCutScalarsOff()
+    self.cutEdges.SetValue(0, 0.5)
           
     # Put together into polylines
     cutStrips = vtk.vtkStripper()
-    cutStrips.SetInputConnection(cutEdges.GetOutputPort())
+    cutStrips.SetInputConnection(self.cutEdges.GetOutputPort())
     cutStrips.Update()
 
     edgeMapper = vtk.vtkPolyDataMapper()
@@ -404,13 +412,93 @@ class Viewer2D(QFrame):
     if self.contourActor is not None:
       self.viewer.GetRenderWindow().GetInteractor().Disable()
       self.viewer.GetRenderWindow().GetInteractor().Enable()
+
+  def SetTransform(self, tf):
+    self.trans = tf
+    self.invTrans = tf.GetInverse()
+    if 0:
+      self.contourActor.SetUserTransform(tf)
+    else:
+      # New way using extra adjustment
+      tmp = vtk.vtkTransform() # Stored as a user transform
+      tmp.PostMultiply()
+      tmp.Concatenate(tf)
+      tmp.Concatenate(self.adjustment)
+      self.contourActor.SetUserTransform(tmp)
+
+  def UpdateContours(self):
+    if self.contourActor is not None:
+      RCW = self.viewer.GetResliceCursorWidget()    
+      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+      origin = ps.GetOrigin()
+      normal = ps.GetNormal()
+      # TEST use cursor instead (works)
+      #origin = self.GetResliceCursor().GetCenter()
+      #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
+      if self.trans is not None:
+        cutOrigin = self.invTrans.TransformPoint(origin)
+        cutNormal = self.invTrans.TransformVector(normal)
+      else:
+        cutOrigin = origin
+        cutNormal = normal
+        
+      self.plane.SetOrigin(cutOrigin)
+      self.plane.SetNormal(cutNormal)
+      self.plane.Modified()
+
+      # Is this necessary???
+      self.cutEdges.Update()
+
+      # Move in front of image (z-buffer)
+      self.adjustment.Identity()
+      self.adjustment.Translate(normal)
+
       
-  def UpdateContours(self, misalign=None):
+
+  def UpdateContoursShit(self, transform=None):
+    if self.contourActor is not None:
+      RCW = self.viewer.GetResliceCursorWidget()    
+      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
+      origin = ps.GetOrigin()
+      normal = ps.GetNormal()
+      # TEST use cursor instead (works)
+      #origin = self.GetResliceCursor().GetCenter()
+      #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
+      if transform is not None:
+        # Transform - apply inverse transform to origin and normal
+        inv = vtk.vtkTransform()
+        inv.DeepCopy(transform)
+        inv.Inverse()
+        origin = inv.TransformPoint(origin)
+        cutNormal = inv.TransformVector(normal)
+        
+      self.plane.SetOrigin(origin)
+      self.plane.SetNormal(cutNormal)
+      self.plane.Modified()
+
+      # Move in front of image (z-buffer)
+      userTransform = vtk.vtkTransform()
+      userTransform.Identity()
+      userTransform.PostMultiply()
+      if transform is not None:
+        # This is pipelined!!! Problem!!!
+        #userTransform.Concatenate(transform)
+        tmp = vtk.vtkTransform()
+        tmp.SetMatrix(transform.GetMatrix())
+        userTransform.Concatenate(tmp)
+
+      userTransform.Translate(normal)
+
+      # Issue with memory in transform!!!
+      self.contourActor.SetUserTransform(userTransform)
+      
+  def UpdateContours2(self, misalign=None):
     if self.contourActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
       normal = ps.GetNormal()
       origin = ps.GetOrigin()
+      # TEST use cursor instead
       if misalign is not None:
         misalign2 = vtk.vtkTransform()
         misalign2.DeepCopy(misalign)
@@ -437,6 +525,7 @@ class Viewer2D(QFrame):
       # 
       if misalign is not None:
         transform.Concatenate(misalign)
+
       self.contourActor.SetUserTransform(transform)
       self.contourActor.Modified()
   def test(self, caller, ev):

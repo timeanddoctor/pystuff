@@ -1,6 +1,8 @@
 #!/bin/env python3
 
 # TODO:
+#       1. Navigate after alignment
+#
 #       Debug UpdataContours if misalignment is a rotation!!!
 #       Handle sync views
 
@@ -11,8 +13,6 @@
 #       Stack of 2 widgets (postponed)
 #       Sync views (continued)
 #       Pick objects
-#       Introduce misalignment of contours
-#       Navigate with misalignment
 
 
 # 1. Get axes and perform reslice yourself. Get 3D coordinate of resliced point
@@ -142,7 +142,8 @@ class ResliceCallbackUS(object):
       rep = caller.GetRepresentation()
       rep.GetResliceCursorActor().GetCursorAlgorithm().GetResliceCursor()
       for i in range(2):
-        main_window.viewUS[i].UpdateContours(main_window.misAlignment)
+        # TEST
+        main_window.viewUS[i].UpdateContours()
 
       if self.syncViews:
         # TODO: Call this when button is clicked
@@ -193,6 +194,8 @@ class SmartLock(QMainWindow, ui):
     self.usActor = None # Used for overlay
     self.usCorrectedActor = None
     self.lastUSContours = None
+
+    self.vessel = None
     
     # Update this when load interior and exterior
     self.CTContours = None
@@ -202,6 +205,7 @@ class SmartLock(QMainWindow, ui):
 
     self.misAlignment = vtk.vtkTransform()
     self.misAlignment.Identity()
+    self.misAlignment.PostMultiply()
 
   def onArrowsClicked(self, _view, _direction):
     if _view == azel.AZ:
@@ -235,7 +239,7 @@ class SmartLock(QMainWindow, ui):
         vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
         self.misAlignment.Translate(second)
     elif _view == azel.RESET:
-      # Remove actors
+      # Remove actors from 3D
       if self.usActor is not None or self.usCorrectedActor is not None:
         self.viewer3D.interactor.Disable()
         if self.usCorrectedActor is not None:
@@ -245,14 +249,13 @@ class SmartLock(QMainWindow, ui):
           self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usActor)
           self.usActor = None
         self.viewer3D.interactor.Enable()
-        self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
+        #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
       self.viewUS[0].RemoveOverlay()
       self.misAlignment.Identity()
-      self.misAlignment.Update()
-      
+
     # Update contours
     for i in range(2):
-      self.viewUS[i].UpdateContours(self.misAlignment)
+      self.viewUS[i].UpdateContours()
     self.Render()
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -376,24 +379,53 @@ class SmartLock(QMainWindow, ui):
   @pyqtSlot(float, 'PyQt_PyObject', 'PyQt_PyObject')
   def updateRegistration(self, rmse, transform, newContours):
     print('RMSE: %f' % (rmse))
-    transform.Inverse()
-    # TODO: Concatenate with new correction instead
+    # We cannot call Inverse on transform, since it is an ICP and will
+    # issue a registration where source and target are interchanged
+
+    mat = vtk.vtkMatrix4x4()
+    mat.DeepCopy(transform.GetMatrix())
+    
+    alignTransform = vtk.vtkTransform()
+    alignTransform.SetMatrix(mat)
+    alignTransform.Inverse()
+    #alignTransform.PostMultiply()
+    
+    # TODO: Concatenate is pipelined so changes to either alignTransform or
+    # misAlignment will have effect when TransformPoint is called.
+
+    # Consider non-pipelined version
+    #self.misAlignment.Concatenate(alignTransform)
+
+    oldMat = vtk.vtkMatrix4x4()
+    oldMat.DeepCopy(self.misAlignment.GetMatrix())
+    oldTransform = vtk.vtkTransform()
+    oldTransform.SetMatrix(oldMat)
+    #oldTransform.PostMultiply()
+
+    oldTransform.Concatenate(alignTransform)
+    oldTransform.Update()
+    
+    newMat = vtk.vtkMatrix4x4()
+    newMat.DeepCopy(oldTransform.GetMatrix())
+    
+    self.misAlignment.Identity()
+    self.misAlignment.SetMatrix(newMat)
     self.misAlignment.PostMultiply()
-    self.misAlignment.Concatenate(transform)
     self.misAlignment.Update()
+
     for i in range(len(self.viewUS)):
-      #tmp = self.viewUS[i].contourActor.GetUserTransform()
-      #tmp.Identity()
       # TEST reinitializing
-      self.viewUS[i].InitializeContours(self.appendFilter)
-      self.viewUS[i].UpdateContours(self.misAlignment) # transform is good if concatenated
+      #self.viewUS[i].InitializeContours(self.appendFilter)
+      self.viewUS[i].UpdateContours()
       self.viewUS[i].viewer.GetResliceCursorWidget().Render()
+
     if self.usCorrectedActor is not None:
       self.viewer3D.interactor.Disable()
       self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usCorrectedActor)
       self.viewer3D.interactor.Enable()
       self.usCorrectedActor = None
-      self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
+      # Redundant rendering
+      #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
 
     # Tube filter and color them green
     tubes = vtk.vtkTubeFilter()
@@ -415,7 +447,9 @@ class SmartLock(QMainWindow, ui):
     #renderLinesAsTubes(prop)
     
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usCorrectedActor)
-    self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
+    # Redundant rendering
+    #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
+
     self.btnReg.setEnabled(True)
     self.Render()
       
@@ -454,8 +488,8 @@ class SmartLock(QMainWindow, ui):
 
   def onRegClicked(self):
     print("Registration")
-    self.btnReg.setEnabled(False)
     if self.lastUSContours is not None:
+      self.btnReg.setEnabled(False)
       self.viewUS[1].RemoveOverlay()
       
       # Callback for displaying segmentation
@@ -463,6 +497,7 @@ class SmartLock(QMainWindow, ui):
       
       dummy = vtk.vtkTransform()
       dummy.DeepCopy(self.misAlignment)
+      dummy.PostMultiply()
       
       # No need it is already copied
       self.regServer.execute.emit(self.lastUSContours, dummy, self.appendFilter)
@@ -607,9 +642,9 @@ class SmartLock(QMainWindow, ui):
         # Load data
         self.loadFile(fileName)
       elif (info.completeSuffix() == "vtp") and fileType == 1:
-        self.loadSurface(fileName, contours=True, index=0)
+        self.loadSurface(fileName, index=0)
       elif (info.completeSuffix() == "vtp") and fileType == 2:
-        self.loadSurface(fileName, contours=False, index=1)
+        self.loadSurface(fileName, index=1)
       elif (info.completeSuffix() == "mhd") and fileType == 3:
         self.loadUSFile(fileName)
 
@@ -638,13 +673,16 @@ class SmartLock(QMainWindow, ui):
     actor.SetMapper(mapper)
     prop = actor.GetProperty()
 
+    
     if index == 0:
       # Veins
       prop.SetColor(vtk.vtkColor3d(hexCol("#517487"))) # 25% lighter
     else:
       # Liver
       prop.SetColor(vtk.vtkColor3d(hexCol("#873927")))
-      
+
+    self.vessels = actor
+    
     # Assign actor to the renderer
     prop.SetOpacity(0.35)
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(actor)
@@ -658,8 +696,14 @@ class SmartLock(QMainWindow, ui):
     # TODO: Make this work if read before US
     for i in range(self.stackCT.count()):
       self.stackCT.widget(i).InitializeContours(self.appendFilter,color=pink)
+      self.stackCT.widget(i).SetTransform(self.misAlignment)
+
     for i in range(len(self.viewUS)):
       self.viewUS[i].InitializeContours(self.appendFilter)
+      self.viewUS[i].SetTransform(self.misAlignment)
+
+    if self.vessels is not None:
+      self.vessels.SetUserTransform(self.misAlignment)
 
     self.Render()
 
@@ -839,12 +883,12 @@ if __name__ == '__main__':
     mySettings = QSettings()
     fileDir = mySettings.value(main_window.DEFAULT_DIR_KEY)
     
-    main_window.loadFile(os.path.join(fileDir,defaultFiles[0]))
-    main_window.loadUSFile(os.path.join(fileDir,defaultFiles[3])) # US
+    main_window.loadFile(os.path.join(fileDir,defaultFiles[0])) # CT
+#    main_window.loadUSFile(os.path.join(fileDir,defaultFiles[3])) # US
 #    main_window.loadUSFile(os.path.join(fileDir,defaultFiles[4])) # NoBound
-#    main_window.loadUSFile(os.path.join(fileDir,defaultFiles[5])) # White
-    main_window.loadSurface(os.path.join(fileDir,defaultFiles[1]),0) 
-    main_window.loadSurface(os.path.join(fileDir,defaultFiles[2]),1) # Liver 
+    main_window.loadUSFile(os.path.join(fileDir,defaultFiles[5])) # White
+    main_window.loadSurface(os.path.join(fileDir,defaultFiles[1]),0)  # Vessels
+#    main_window.loadSurface(os.path.join(fileDir,defaultFiles[2]),1)
   
   sys.exit(app.exec_())
 
