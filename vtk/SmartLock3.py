@@ -1,24 +1,19 @@
 #!/bin/env python3
 
 # TODO:
-#       1. Navigate after alignment
-#
-#       Debug UpdataContours if misalignment is a rotation!!!
-#       Handle sync views
-
-#       Contours in 2D (done somewhat, clean when reg is pressed)
-#       Join polydata (pause renderers)
-#       Add misalignment and correction transform
-
-#       Stack of 2 widgets (postponed)
-#       Sync views (continued)
-#       Pick objects
-
-
-# 1. Get axes and perform reslice yourself. Get 3D coordinate of resliced point
-# 2. Adjust with distance to screen (distance to plane) (Works)
-# 3. Picker (only with zoom)
-
+# 1. Sliders from RotContourViewer
+# 2. Reg matrix in RegService
+# 3. Display translation error, angle error, dot product
+# 4. Dump to file, 1mm, 2mm, 5mm, 10mm
+# 5. Perform bifurcation in-plane
+#    a. in-plane translation (x2)
+#    b. out-of-plane translation
+# 6. Vessel in-plane
+#    a. in-plane translation (x2)
+#    b. out-of-plane translation
+# 7. Crossing vessels
+#    a. in-plane translation (x2)
+#    b. out-of-plane translation
 import os
 import sys
 from importlib import reload
@@ -204,9 +199,18 @@ class SmartLock(QMainWindow, ui):
     # Append all surfaces to this
     self.appendFilter = vtk.vtkAppendPolyData()
 
+    # TODO: Remove this
+    self.alignment = vtk.vtkTransform()
+    self.alignment.PostMultiply()
+
     self.misAlignment = vtk.vtkTransform()
-    self.misAlignment.Identity()
     self.misAlignment.PostMultiply()
+    
+    self.regAlignment = vtk.vtkTransform()
+    self.regAlignment.PostMultiply()
+    
+    self.alignment.Concatenate(self.misAlignment)
+    self.alignment.Concatenate(self.regAlignment)
 
   def onArrowsClicked(self, _view, _direction):
     if _view == azel.AZ:
@@ -253,6 +257,7 @@ class SmartLock(QMainWindow, ui):
         #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
       self.viewUS[0].RemoveOverlay()
       self.misAlignment.Identity()
+      self.regAlignment.Identity()
 
     # Update contours
     for i in range(2):
@@ -378,45 +383,17 @@ class SmartLock(QMainWindow, ui):
 
   # Errors here
   @pyqtSlot(float, 'PyQt_PyObject', 'PyQt_PyObject')
-  def updateRegistration(self, rmse, transform, newContours):
+  def updateRegistration(self, rmse, mat, newContours):
     print('RMSE: %f' % (rmse))
     # We cannot call Inverse on transform, since it is an ICP and will
     # issue a registration where source and target are interchanged
+    #mat = vtk.vtkMatrix4x4()
+    #mat.DeepCopy(transform.GetMatrix())
 
-    mat = vtk.vtkMatrix4x4()
-    mat.DeepCopy(transform.GetMatrix())
-    
-    alignTransform = vtk.vtkTransform()
-    alignTransform.SetMatrix(mat)
-    alignTransform.Inverse()
-    #alignTransform.PostMultiply()
-    
-    # TODO: Concatenate is pipelined so changes to either alignTransform or
-    # misAlignment will have effect when TransformPoint is called.
-
-    # Consider non-pipelined version
-    #self.misAlignment.Concatenate(alignTransform)
-
-    oldMat = vtk.vtkMatrix4x4()
-    oldMat.DeepCopy(self.misAlignment.GetMatrix())
-    oldTransform = vtk.vtkTransform()
-    oldTransform.SetMatrix(oldMat)
-    #oldTransform.PostMultiply()
-
-    oldTransform.Concatenate(alignTransform)
-    oldTransform.Update()
-    
-    newMat = vtk.vtkMatrix4x4()
-    newMat.DeepCopy(oldTransform.GetMatrix())
-    
-    self.misAlignment.Identity()
-    self.misAlignment.SetMatrix(newMat)
-    self.misAlignment.PostMultiply()
-    self.misAlignment.Update()
-
+    self.regAlignment.SetMatrix(mat)
+    self.regAlignment.Inverse()
+      
     for i in range(len(self.viewUS)):
-      # TEST reinitializing
-      #self.viewUS[i].InitializeContours(self.appendFilter)
       self.viewUS[i].UpdateContours()
       self.viewUS[i].viewer.GetResliceCursorWidget().Render()
 
@@ -425,8 +402,6 @@ class SmartLock(QMainWindow, ui):
       self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usCorrectedActor)
       self.viewer3D.interactor.Enable()
       self.usCorrectedActor = None
-      # Redundant rendering
-      #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
 
     # Tube filter and color them green
     tubes = vtk.vtkTubeFilter()
@@ -438,18 +413,14 @@ class SmartLock(QMainWindow, ui):
       
     edgeMapper = vtk.vtkPolyDataMapper()
     edgeMapper.SetInputConnection(tubes.GetOutputPort())
-    #edgeMapper.SetInputData(newContours)
     edgeMapper.ScalarVisibilityOff()
       
     self.usCorrectedActor = vtk.vtkActor()
     self.usCorrectedActor.SetMapper(edgeMapper)
     prop = self.usCorrectedActor.GetProperty()
     prop.SetColor(yellow)
-    #renderLinesAsTubes(prop)
     
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usCorrectedActor)
-    # Redundant rendering
-    #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
 
     self.btnReg.setEnabled(True)
     self.Render()
@@ -497,7 +468,7 @@ class SmartLock(QMainWindow, ui):
       self.regServer.ready.connect(self.updateRegistration)
       
       dummy = vtk.vtkTransform()
-      dummy.DeepCopy(self.misAlignment)
+      dummy.SetMatrix(self.misAlignment.GetMatrix())
       dummy.PostMultiply()
       
       # No need it is already copied
@@ -560,7 +531,8 @@ class SmartLock(QMainWindow, ui):
                                  " } ")
             widget.setHandleWidth(2) # Default is 3
     # Setup 3D viewer
-    self.viewer3D = Viewer3D(self)
+    self.viewer3D = Viewer3D(self, showOrientation=False,
+                             showPlaneTextActors=False)
     self.viewer3D.AddPlaneCornerButtons()
 
     self.layout3D.setContentsMargins(0, 0, 0, 0)
@@ -620,6 +592,8 @@ class SmartLock(QMainWindow, ui):
   def onLoadClicked(self, fileType):
     mySettings = QSettings()
     fileDir = mySettings.value(self.DEFAULT_DIR_KEY)
+    if fileDir is None:
+      fileDir = os.path.dirname(__file__)
     options = QFileDialog.Options()
     options |= QFileDialog.DontUseNativeDialog
     fileDialog = QFileDialog()
@@ -631,7 +605,9 @@ class SmartLock(QMainWindow, ui):
     fileName, _ = \
       fileDialog.getOpenFileName(self,
                                  "QFileDialog.getOpenFileName()",
-                                 defaultFile, "All Files (*)MHD Files (*.mhd) VTP Files (*.vtp)",
+                                 defaultFile, "All Files (*);"
+                                 "MHD Files (*.mhd);"
+                                 "VTP Files (*.vtp)",
                                  options=options)
     if fileName:
       # Update default dir
@@ -697,11 +673,11 @@ class SmartLock(QMainWindow, ui):
     # TODO: Make this work if read before US
     for i in range(self.stackCT.count()):
       self.stackCT.widget(i).InitializeContours(self.appendFilter,color=pink)
-      self.stackCT.widget(i).SetTransform(self.misAlignment)
 
     for i in range(len(self.viewUS)):
       self.viewUS[i].InitializeContours(self.appendFilter)
-      self.viewUS[i].SetTransform(self.misAlignment)
+      # TODO: Assign instead product of two identity matrices
+      self.viewUS[i].SetTransform(self.alignment)
 
     if self.vessels is not None:
       self.vessels.SetUserTransform(self.misAlignment)
