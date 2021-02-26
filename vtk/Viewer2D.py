@@ -1,8 +1,7 @@
-# Clean-up
-# Stack with 2 views
-# World coordinates of click
-# Transformation
-# Registration
+# TODO:
+#  Clean-up
+#  Stack with 2 views
+#  World coordinates of click
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -99,7 +98,12 @@ class Viewer2D(QFrame):
         prop.SetOpacity(1.0)
       else:
         prop.SetOpacity(0.0)
+
   def GetDirections(self):
+    """
+    Return image directions of current view in world coordinates. Changes if
+    image is rotated.
+    """
     renderer = self.viewer.GetRenderer()
     # Get screen frame
     coordinate = vtk.vtkCoordinate()
@@ -121,6 +125,7 @@ class Viewer2D(QFrame):
     normal1 = vtk.vtkVector3d()
     vtk.vtkMath.Cross(first1, second1, normal1)
     return first1, second1, normal1
+
   def GetScreenTransform(self):
     """
     Get transform from origin to window slice plane
@@ -329,6 +334,7 @@ class Viewer2D(QFrame):
   def ShowHideAnnotations(self, show=True):
     if self.cornerAnnotation is not None:
       self.cornerAnnotation.SetVisibility(show)
+
   def SetInputData(self, data):
     self.viewer.SetInputData(data)
     # Corner annotation, can use <slice>, <slice_pos>, <window_level>
@@ -336,9 +342,10 @@ class Viewer2D(QFrame):
     self.cornerAnnotation.SetLinearFontScaleFactor(2)
     self.cornerAnnotation.SetNonlinearFontScaleFactor(1)
     self.cornerAnnotation.SetMaximumFontSize(20)
-    self.cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft, {2:'Axial',
-                                                                 0:'Sagittal',
-                                                                 1:'Coronal'}[self.iDim])
+    self.cornerAnnotation.SetText(vtk.vtkCornerAnnotation.UpperLeft,
+                                  {2:'Axial Superior',
+                                   0:'Sagittal Left',
+                                   1:'Coronal Anterior'}[self.iDim])
     prop = self.cornerAnnotation.GetTextProperty()
     prop.BoldOn()
     color = deque((1,0,0))
@@ -369,7 +376,7 @@ class Viewer2D(QFrame):
 
     # Generate line segments
     self.cutEdges = vtk.vtkCutter()
-    self.cutEdges.SetInputConnection(self.data.GetOutputPort())#main_window.vesselNormals.GetOutputPort())
+    self.cutEdges.SetInputConnection(self.data.GetOutputPort())
     self.cutEdges.SetCutFunction(self.plane)
     self.cutEdges.GenerateCutScalarsOff()
     self.cutEdges.SetValue(0, 0.5)
@@ -388,7 +395,7 @@ class Viewer2D(QFrame):
     renderLinesAsTubes(prop)
     prop.SetColor(color) # If Scalars are extracted - they turn green
 
-    # Move in front of image
+    # Move in front of image (is this necessary?)
     transform = vtk.vtkTransform()
     transform.Translate(normal)
     self.contourActor.SetUserTransform(transform)
@@ -402,6 +409,7 @@ class Viewer2D(QFrame):
   def ShowHideContours(self, show):
     if self.contourActor is not None:
       self.contourActor.SetVisibility(show)
+
   def SetResliceCursor(self, cursor):
     self.viewer.SetResliceCursor(cursor)
 
@@ -455,8 +463,6 @@ class Viewer2D(QFrame):
       self.adjustment.Identity()
       self.adjustment.Translate(normal)
 
-      
-
   def UpdateContoursShit(self, transform=None):
     if self.contourActor is not None:
       RCW = self.viewer.GetResliceCursorWidget()    
@@ -494,44 +500,9 @@ class Viewer2D(QFrame):
       # Issue with memory in transform!!!
       self.contourActor.SetUserTransform(userTransform)
       
-  def UpdateContours2(self, misalign=None):
-    if self.contourActor is not None:
-      RCW = self.viewer.GetResliceCursorWidget()    
-      ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
-      normal = ps.GetNormal()
-      origin = ps.GetOrigin()
-      # TEST use cursor instead
-      if misalign is not None:
-        misalign2 = vtk.vtkTransform()
-        misalign2.DeepCopy(misalign)
-        inverse = vtk.vtkTransform()
-        inverse.DeepCopy(misalign)
-        inverse.Inverse()
-        origin = inverse.TransformPoint(origin)
-        # first column is new x-axis
-        mat3 = rotationFromHomogeneous(inverse.GetMatrix())
-        tmp = vtk.vtkVector3d()
-        tmp[0] = normal[0]
-        tmp[1] = normal[1]
-        tmp[2] = normal[2]
-        mat3.MultiplyPoint(tmp, tmp)
-        normal = tmp
-      self.plane.SetOrigin(origin)
-      self.plane.SetNormal(normal)
-      self.plane.Modified() # TEST
-
-      # Move in front of image (z-buffer)
-      transform = vtk.vtkTransform()
-      transform.Translate(normal) # TODO: Add 'EndEvent' on transform filter
-      transform.PostMultiply()
-      # 
-      if misalign is not None:
-        transform.Concatenate(misalign)
-
-      self.contourActor.SetUserTransform(transform)
-      self.contourActor.Modified()
   def test(self, caller, ev):
     print('test')
+
   def Start(self):
     self.interactor.Initialize()
     self.interactor.Start()
@@ -595,11 +566,12 @@ class Viewer2DStacked(QStackedWidget):
       
     # Establish callbacks
   def btnViewChangeClicked(self, widget, event):
+    # TODO: Consider hiding other actors, i.e. no rendering to images not shown
     index = self.currentIndex()
     index = index + 1
     index = index % 3
     self.setCurrentIndex(index)
-    # TODO: Consider hiding other actors
+
   def Initialize(self):
     for i in range(self.count()):
       self.widget(i).Start()

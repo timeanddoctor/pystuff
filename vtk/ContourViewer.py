@@ -5,7 +5,7 @@ from collections import deque
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from vtk.util.colors import red, yellow
+from vtk.util.colors import red, yellow, black
 
 from PyQt5.uic import loadUiType
 from PyQt5.QtCore import Qt, QObject, QCoreApplication,\
@@ -191,7 +191,7 @@ class FourPaneViewer(QMainWindow, ui):
                                  "QFileDialog.getOpenFileName()",
                                  "", "All Files (*);"
                                  ";MHD Files (*.mhd);"
-                                 "; VTP Files (*.vtp)",
+                                 ";VTP Files (*.vtp)",
                                  options=options)
     if fileName:
       # Update default dir
@@ -311,8 +311,6 @@ class FourPaneViewer(QMainWindow, ui):
       
   def AddTextToPlanes(self, imageSize, scale0=15.0):
     # Size is in [mm]
-    # TODO: Positioning depends on size of labels and imageSize (FIX)
-    # Right now, they are hardcoded
     textActors = list()
     scale = [scale0, scale0, scale0] # Consider scaling to fraction of data
 
@@ -397,7 +395,6 @@ class FourPaneViewer(QMainWindow, ui):
     textActor5.SetMapper(textMapper5)
     textActor5.SetScale(scale)
     textActor5.GetProperty().SetColor(0,1,0)
-    #textActor5.AddPosition(20.0, 80.0, -0.5) # Last is out of plane
     bounds = textActor5.GetBounds()
     # possible bug here, why not 3 - 2 and imageSize[2]
     print(bounds)
@@ -417,7 +414,6 @@ class FourPaneViewer(QMainWindow, ui):
     textActor6.SetMapper(textMapper6)
     textActor6.SetScale(scale)
     textActor6.GetProperty().SetColor(0,0,1)
-    # textActor6.AddPosition(100.0, 100.0, -0.5) # Original
     bounds = textActor6.GetBounds()
     textActor6.AddPosition(-margin+imageSize[0]+bounds[1], bounds[3]-bounds[2], -0.5) # Last is out of plane
     textActors.append(textActor6)
@@ -535,6 +531,9 @@ class FourPaneViewer(QMainWindow, ui):
       renderLinesAsTubes(prop)
       pw.SetCursorProperty(prop)
 
+      prop = pw.GetTextProperty()
+      prop.SetColor(black)
+      
       pw.Modified()
       # Set background for 2D views
       for j in range(3):
@@ -623,7 +622,11 @@ class FourPaneViewer(QMainWindow, ui):
     if (index > -1):
       if not isChecked:
         self.planeWidget[index].Off()
+        self.planeTextActors[index].SetVisibility(False)
+        self.planeTextActors[(index+3) % 6].SetVisibility(False)
       else:
+        self.planeTextActors[index].SetVisibility(True)
+        self.planeTextActors[(index+3) % 6].SetVisibility(True)
         self.planeWidget[index].On()
     return
   def establishCallbacks(self):

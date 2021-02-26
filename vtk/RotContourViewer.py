@@ -481,15 +481,6 @@ class FourPaneViewer(QMainWindow, ui):
     verticalSpacer = QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
     vert_layout.addSpacerItem(verticalSpacer)
 
-    # Misalignment
-    self.createMisAlignment(vert_layout)
-    
-    # Positioning
-    self.createMovement(vert_layout)
-
-    self.frame.setLayout(vert_layout)
-  def createMisAlignment(self, vert_layout):
-    # Misalignment
     groupBox = QGroupBox("Misalignment")
     vert_layout.addWidget(groupBox)
     mis_layout = QVBoxLayout()
@@ -500,57 +491,34 @@ class FourPaneViewer(QMainWindow, ui):
     self.btnReset = QPushButton("Reset")
     self.btnReset.clicked.connect(self.onResetOffset)
 
-    # Misalignment sliders
+    # Misalignment buttons
     horz_layout4 = QHBoxLayout()
     horz_layout4.addWidget(self.btnLocal)
     horz_layout4.addSpacerItem(horzSpacer)
     horz_layout4.addWidget(self.btnReset)
     mis_layout.addItem(horz_layout4)
     
-    for i in range(3):
-      layout0 = QHBoxLayout()
-      exec("self.sliderT"+chr(88+i)+"=QFloatSlider(Qt.Horizontal,self)")
-      exec("self.sliderT"+chr(88+i)+".setRange(-10.0, 10.0, 21)")
-      exec("self.sliderT"+chr(88+i)+".setFloatValue(0.0)")
-      exec("self.sliderT"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
-      exec("self.btnTrans"+chr(88+i)+" = QToolButton()")
-      act = QAction()
-      exec("act.setText(\"T"+chr(88+i)+"\")")
-      exec("self.btnTrans"+chr(88+i)+".setDefaultAction(act)")
-      exec("self.btnTrans"+chr(88+i)+".clicked.connect(self.onOrientationClicked)")
-      exec("layout0.addWidget(self.sliderT"+chr(88+i)+")")
-      exec("layout0.addWidget(self.btnTrans"+chr(88+i)+")")
-    
-      layout1 = QHBoxLayout()
-      exec("self.sliderR"+chr(88+i)+" = QFloatSlider(Qt.Horizontal,self)")
-      exec("self.sliderR"+chr(88+i)+".setRange(-90.0,90.0,37)")
-      exec("self.sliderR"+chr(88+i)+".setFloatValue(0.0)")
-      exec("self.sliderR"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
-      exec("self.btnRot"+chr(88+i)+" = QToolButton()")
-      act = QAction()
-      exec("act.setText(\"R"+chr(88+i)+"\")")
-      exec("self.btnRot"+chr(88+i)+".setDefaultAction(act)")
-      exec("self.btnRot"+chr(88+i)+".clicked.connect(self.onOrientationClicked)")
-      exec("layout1.addWidget(self.sliderR"+chr(88+i)+")")
-      exec("layout1.addWidget(self.btnRot"+chr(88+i)+")")
-      mis_layout.addItem(layout0)
-      mis_layout.addItem(layout1)
+    # Misalignment sliders
+    [(self.sliderTX, self.btnTransX),
+     (self.sliderTY, self.btnTransY),
+     (self.sliderTZ, self.btnTransZ),
+     (self.sliderRX, self.btnRotX),
+     (self.sliderRY, self.btnRotY),
+     (self.sliderRZ, self.btnRotZ)] = self.createMisAlignment(mis_layout, self.onOrientationClicked)
     groupBox.setLayout(mis_layout)
-
-  def createMovement(self, inLayout):
-    global startX, startY, startZ
+    
     groupBox = QGroupBox("Movement")
-    inLayout.addWidget(groupBox)
+    vert_layout.addWidget(groupBox)
     groupLayout = QVBoxLayout()
     
     # Local and reset
     horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
-
+    
     # TODO: Return values
     self.btnLocal1 = QCheckBox("local")
     self.btnReset1 = QPushButton("Reset")
     self.btnReset1.clicked.connect(self.onResetMovement)
-
+    
     # Movement sliders
     layout = QHBoxLayout()
     layout.addWidget(self.btnLocal1)
@@ -558,37 +526,88 @@ class FourPaneViewer(QMainWindow, ui):
     layout.addWidget(self.btnReset1)
     groupLayout.addItem(layout)
 
+    [(self.sliderMX, self.sliderMY, self.sliderMZ),
+     (self.sliderRX, self.sliderRY, self.sliderRZ)] = self.createMovement(groupLayout, self.onSliderPressed, self.onMove)
+    groupBox.setLayout(groupLayout)
+      
+    self.frame.setLayout(vert_layout)
+
+  def createMisAlignment(self, mis_layout, callback):
+    controls0 = []
+    controls1 = []
+    for i in range(3):
+      # Translation
+      layout0 = QHBoxLayout()
+      slider=QFloatSlider(Qt.Horizontal,self)
+      slider.setRange(-10.0, 10.0, 21)
+      slider.setFloatValue(0.0)
+      slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+      button = QToolButton()
+      act = QAction()
+      act.setText("T"+chr(88+i))
+      button.setDefaultAction(act)
+      button.clicked.connect(callback)
+      layout0.addWidget(slider)
+      layout0.addWidget(button)
+      controls0.append((slider,button))
+
+      # Rotation
+      layout1 = QHBoxLayout()
+      slider = QFloatSlider(Qt.Horizontal,self)
+      slider.setRange(-90.0,90.0,37)
+      slider.setFloatValue(0.0)
+      slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+      button = QToolButton()
+      act = QAction()
+      act.setText("R"+chr(88+i))
+      button.setDefaultAction(act)
+      button.clicked.connect(callback)
+      layout1.addWidget(slider)
+      layout1.addWidget(button)
+      mis_layout.addItem(layout0)
+      mis_layout.addItem(layout1)
+      controls1.append((slider,button))
+    return controls0 + controls1
+
+  def createMovement(self, inLayout, onPressed, onReleased):
+    controls0 = []
+    controls1 = []
+
     for i in range(3):
       layout0 = QHBoxLayout()
-      exec("self.sliderM"+chr(88+i)+"=QFloatSlider(Qt.Horizontal,self)")
-      exec("self.sliderM"+chr(88+i)+".setRange(-20.0, 20.0, 41)")
-      exec("self.sliderM"+chr(88+i)+".setFloatValue(0.0)")
-      exec("self.sliderM"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
-      exec("self.sliderM"+chr(88+i)+".sliderPressed.connect(lambda self=self: self.onSliderPressed(" + "%d" % (i) + "))")
-      exec("self.sliderM"+chr(88+i)+".sliderReleased.connect(lambda self=self: self.onMove(" + "%d" % (i) + "))")
-      exec("layout0.addWidget(self.sliderM"+chr(88+i)+")")
-      groupLayout.addItem(layout0)
+      slider=QFloatSlider(Qt.Horizontal,self)
+      slider.setRange(-20.0, 20.0, 41)
+      slider.setFloatValue(0.0)
+      slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+      slider.sliderPressed.connect(lambda: onPressed(0, i))
+      slider.sliderReleased.connect(lambda: onReleased(0, i))
+      layout0.addWidget(slider)
+      controls0.append(slider)
+      inLayout.addItem(layout0)
 
-      # TODO: Rotate movement
-      #layout1 = QHBoxLayout()
-      #exec("self.sliderR"+chr(88+i)+" = QFloatSlider(Qt.Horizontal,self)")
-      #exec("self.sliderR"+chr(88+i)+".setRange(-90.0,90.0,37)")
-      #exec("self.sliderR"+chr(88+i)+".setFloatValue(0.0)")
-      #exec("self.sliderR"+chr(88+i)+".floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), \"%f\" % (value), None))")
-      #exec("self.btnRot"+chr(88+i)+" = QToolButton()")
-      #exec("layout1.addWidget(self.sliderR"+chr(88+i)+")")
-      #layout.addItem(layout1)
-    groupBox.setLayout(groupLayout)
-  def onSliderPressed(self, dim):
+      layout1 = QHBoxLayout()
+      slider=QFloatSlider(Qt.Horizontal,self)
+      slider.setRange(-45.0, 45.0, 91)
+      slider.setFloatValue(0.0)
+      slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
+      slider.sliderPressed.connect(lambda: onPressed(1, i))
+      slider.sliderReleased.connect(lambda: onReleased(1, i))
+      layout1.addWidget(slider)
+      controls1.append(slider)
+      inLayout.addItem(layout1)
+      
+    return controls0, controls1
+
+  def onSliderPressed(self, TR, dim):
     startVal = {0 : self.startX,
-              1 : self.startY,
-              2 : self.startZ}[dim]
+                1 : self.startY,
+                2 : self.startZ}[dim]
     startVal = self.sender().getFloatValue()
 
   def onResetMovement(self):
     print("Reset movement")
     
-  def onMove(self, dim):
+  def onMove(self, TR, dim):
     startVal = {0 : self.startX,
               1 : self.startY,
               2 : self.startZ}[dim]
