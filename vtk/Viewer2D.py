@@ -1,7 +1,5 @@
 # TODO:
-#  Clean-up
-#  Stack with 2 views
-#  World coordinates of click
+# Consider using only one transformation here and call .GetInverse in callback
 
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -39,12 +37,15 @@ class Viewer2D(QFrame):
     self.setLayout(layout)
 
     self.adjustment = vtk.vtkTransform() # Move in front
-
     
     self.viewer = vtk.vtkResliceImageViewer()
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
 
+    # Must be done from start (no effect)
+    #renderWindow = self.viewer.GetRenderWindow()
+    #renderWindow.SetUseOffScreenBuffers(True)
+    
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
@@ -173,7 +174,9 @@ class Viewer2D(QFrame):
     
     return transMat
     
-  def GetScreenImage(self, useOffScreenBuffer=True):
+  def GetScreenImage(self, useOffScreenBuffer=False):
+    # TODO: Fix offscreen reading, if reading offscreen
+    #       they must be enabled earlier
     image = None
     if useOffScreenBuffer:
       image = self.readOffScrenBuffer()
@@ -219,6 +222,7 @@ class Viewer2D(QFrame):
     image.Modified()
     # TODO: Compute orientation for VTK 9.0
     # image.SetOrientation(mat)
+    self.viewer.Render()
     return image
       
   # Get transformation to screen view
@@ -226,6 +230,7 @@ class Viewer2D(QFrame):
                          hideContours=True,
                          hideAnnotations=True):
     renderWindow = self.viewer.GetRenderWindow()
+    # Must be done from start
     if not renderWindow.SetUseOffScreenBuffers(True):
       glRenderWindow.DebugOn()
       glRenderWindow.SetUseOffScreenBuffers(True)
@@ -233,6 +238,10 @@ class Viewer2D(QFrame):
       print("Unable create a hardware frame buffer, the graphic board or driver can be too old")
       sys.exit(-1)
 
+    # Fill buffers (important). A single render and a blit is also okay
+    renderWindow.Render()
+    renderWindow.Render()
+      
     # Hide cursor
     if hideCursor:
       self.ShowHideCursor(False)
@@ -241,15 +250,21 @@ class Viewer2D(QFrame):
     if hideContours:
       self.ShowHideContours(False)
 
+    # Render once offscreen - not shown
+    renderWindow.Render()
+      
     windowToImageFilter = vtk.vtkWindowToImageFilter()
     windowToImageFilter.SetInput(renderWindow)
     windowToImageFilter.Update() # Issues a render call
   
     renderWindow.SetUseOffScreenBuffers(False)
 
+    # Only renders cursors, not contours. The contours must be correct, so
+    # two render calls are issued after enabling offscreen buffers
     self.ShowHideCursor(True)
     self.ShowHideAnnotations(True)
     self.ShowHideContours(True)
+
     return windowToImageFilter.GetOutput()
         
   def readOnScreenBuffer(self, hideCursor=True,
@@ -428,11 +443,18 @@ class Viewer2D(QFrame):
       self.contourActor.SetUserTransform(tf)
     else:
       # New way using extra adjustment
-      tmp = vtk.vtkTransform() # Stored as a user transform
-      tmp.PostMultiply()
-      tmp.Concatenate(tf)
-      tmp.Concatenate(self.adjustment)
-      self.contourActor.SetUserTransform(tmp)
+      self.tmp = vtk.vtkTransform() # Stored as a user transform
+      self.tmp.PostMultiply()
+
+      self.tmp.Concatenate(tf)
+      self.tmp.Concatenate(self.adjustment)
+
+      # TEST - no difference
+      #self.tmp.SetInput(self.adjustment)
+      #self.adjustment.SetInput(tf)
+      
+      # Not good with user transform (issue)
+      self.contourActor.SetUserTransform(self.tmp)
 
   def UpdateContours(self):
     # Alternatively, one could transform the the vtkPlane using
@@ -446,8 +468,15 @@ class Viewer2D(QFrame):
       #origin = self.GetResliceCursor().GetCenter()
       #normal = self.GetResliceCursor().GetPlane(self.iDim).GetNormal()
       if self.trans is not None:
+        # TEST - No change
+        #self.trans.Inverse()
+        #cutOrigin = self.trans.TransformPoint(origin)
+        #cutNormal = self.trans.TransformVector(normal)
+        #self.trans.Inverse()
+        # Current solution
         cutOrigin = self.invTrans.TransformPoint(origin)
         cutNormal = self.invTrans.TransformVector(normal)
+        
       else:
         cutOrigin = origin
         cutNormal = normal

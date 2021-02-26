@@ -199,7 +199,7 @@ class SmartLock(QMainWindow, ui):
     # Append all surfaces to this
     self.appendFilter = vtk.vtkAppendPolyData()
 
-    # TODO: Remove this
+    # TODO: Consider using SetInput
     self.alignment = vtk.vtkTransform()
     self.alignment.PostMultiply()
 
@@ -208,10 +208,14 @@ class SmartLock(QMainWindow, ui):
     
     self.regAlignment = vtk.vtkTransform()
     self.regAlignment.PostMultiply()
-    
-    self.alignment.Concatenate(self.misAlignment)
-    self.alignment.Concatenate(self.regAlignment)
 
+    #self.alignment.Concatenate(self.misAlignment)
+    #self.alignment.Concatenate(self.regAlignment)
+
+    # Same shit
+    self.alignment.SetInput(self.regAlignment)
+    self.regAlignment.SetInput(self.misAlignment)
+    
   def onArrowsClicked(self, _view, _direction):
     if _view == azel.AZ:
       first, second, normal = self.viewUS[1].GetDirections()
@@ -259,6 +263,9 @@ class SmartLock(QMainWindow, ui):
       self.misAlignment.Identity()
       self.regAlignment.Identity()
 
+    self.misAlignment.Update()
+    self.regAlignment.Update()
+    self.alignment.Update()
     # Update contours
     for i in range(2):
       self.viewUS[i].UpdateContours()
@@ -341,6 +348,7 @@ class SmartLock(QMainWindow, ui):
 
   def onSegClicked(self):
     print("Segmentation")
+  
     showCoordinates = False
     savePNGImage = False
     saveMetaImage = False
@@ -351,7 +359,7 @@ class SmartLock(QMainWindow, ui):
       writer.SetInputData(self.segImage)
       writer.Write()
 
-    self.segImage = self.viewUS[1].GetScreenImage()
+    self.segImage = self.viewUS[1].GetScreenImage(useOffScreenBuffer=True)
     # We move image to (0,0,0) but keep size
     self.segImage.SetOrigin(0,0,0)
 
@@ -379,9 +387,6 @@ class SmartLock(QMainWindow, ui):
     # separate parameter, self.trans
     self.segServer.execute.emit(self.segImage, self.trans)
 
-  # UpdateContours with correction instead !!!!!
-
-  # Errors here
   @pyqtSlot(float, 'PyQt_PyObject', 'PyQt_PyObject')
   def updateRegistration(self, rmse, mat, newContours):
     print('RMSE: %f' % (rmse))
@@ -390,9 +395,12 @@ class SmartLock(QMainWindow, ui):
     #mat = vtk.vtkMatrix4x4()
     #mat.DeepCopy(transform.GetMatrix())
 
-    self.regAlignment.SetMatrix(mat)
-    self.regAlignment.Inverse()
-      
+    invMat = vtk.vtkMatrix4x4()
+    vtk.vtkMatrix4x4.Invert(mat, invMat)
+    
+    # This triggers - disable actor to avoid movement
+    self.regAlignment.SetMatrix(invMat)
+    
     for i in range(len(self.viewUS)):
       self.viewUS[i].UpdateContours()
       self.viewUS[i].viewer.GetResliceCursorWidget().Render()
@@ -428,7 +436,6 @@ class SmartLock(QMainWindow, ui):
   @pyqtSlot('PyQt_PyObject')
   def updateSegmentation(self, contours):
     self.lastUSContours = contours
-
     edgeMapper = vtk.vtkPolyDataMapper()
     edgeMapper.SetInputData(self.lastUSContours)
     
@@ -679,6 +686,7 @@ class SmartLock(QMainWindow, ui):
       # TODO: Assign instead product of two identity matrices
       self.viewUS[i].SetTransform(self.alignment)
 
+    # Not here
     if self.vessels is not None:
       self.vessels.SetUserTransform(self.misAlignment)
 
