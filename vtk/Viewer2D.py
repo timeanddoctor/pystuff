@@ -250,9 +250,6 @@ class Viewer2D(QFrame):
     if hideContours:
       self.ShowHideContours(False)
 
-    # Render once offscreen - not shown
-    renderWindow.Render()
-      
     windowToImageFilter = vtk.vtkWindowToImageFilter()
     windowToImageFilter.SetInput(renderWindow)
     windowToImageFilter.Update() # Issues a render call

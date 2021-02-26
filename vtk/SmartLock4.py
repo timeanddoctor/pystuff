@@ -350,16 +350,18 @@ class SmartLock(QMainWindow, ui):
     print("Segmentation")
   
     showCoordinates = False
-    savePNGImage = False
+    savePNGImage = True
     saveMetaImage = False
     self.btnSeg.setEnabled(False)
+
+    self.segImage = self.viewUS[1].GetScreenImage(useOffScreenBuffer=True)
+
     if savePNGImage:
       writer = vtk.vtkPNGWriter()
       writer.SetFileName('./output.png')
       writer.SetInputData(self.segImage)
       writer.Write()
-
-    self.segImage = self.viewUS[1].GetScreenImage(useOffScreenBuffer=True)
+    
     # We move image to (0,0,0) but keep size
     self.segImage.SetOrigin(0,0,0)
 
