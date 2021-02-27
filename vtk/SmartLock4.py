@@ -3,7 +3,8 @@
 # TODO:
 # 1. Sliders from RotContourViewer
 # 2. Reg matrix in RegService
-# 3. Display translation error, angle error, dot product
+# 3. Display translation error, angle error, dot product. (deg, x,y,z) = self.alignment.GetOrientationWXYZ()
+
 # 4. Dump to file, 1mm, 2mm, 5mm, 10mm
 # 5. Perform bifurcation in-plane
 #    a. in-plane translation (x2)
