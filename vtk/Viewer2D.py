@@ -240,8 +240,7 @@ class Viewer2D(QFrame):
 
     # Fill buffers (important). A single render and a blit is also okay
     renderWindow.Render()
-    renderWindow.Render()
-      
+    renderWindow.Frame() #  Perform buffer swap
     # Hide cursor
     if hideCursor:
       self.ShowHideCursor(False)
@@ -250,17 +249,15 @@ class Viewer2D(QFrame):
     if hideContours:
       self.ShowHideContours(False)
 
-    # Render once offscreen
+    # Render once offscreen - not shown
     renderWindow.Render()
       
     windowToImageFilter = vtk.vtkWindowToImageFilter()
     windowToImageFilter.SetInput(renderWindow)
-    windowToImageFilter.Update() # Issues a render if it was a connection
+    windowToImageFilter.Update()
   
     renderWindow.SetUseOffScreenBuffers(False)
 
-    # Only renders cursors, not contours. The contours must be correct, so
-    # two render calls are issued after enabling offscreen buffers
     self.ShowHideCursor(True)
     self.ShowHideAnnotations(True)
     self.ShowHideContours(True)
