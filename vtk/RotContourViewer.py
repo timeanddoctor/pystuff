@@ -115,13 +115,22 @@ class FourPaneViewer(QMainWindow, ui):
     self.startY = 0.0
     self.startZ = 0.0
 
+    self.startRX = 0.0
+    self.startRY = 0.0
+    self.startRZ = 0.0
+    
   def onOrientationClicked(self):
     """
     Blue widget. TODO: Try to actually rotate mesh instead
     """
+    print("clicked")
     sender = self.sender()
+    print(sender)
+    print(self.btnRotZ)
+    print(self.sliderRZ.getFloatValue())
     local = self.btnLocal.isChecked()
 
+    print(local)
     widget = self.vtk_widgets[2]
 
     vx, vy, vn = widget.GetOrientation()
@@ -140,6 +149,7 @@ class FourPaneViewer(QMainWindow, ui):
       da = {self.btnRotX : self.sliderRX,
             self.btnRotY : self.sliderRY,
             self.btnRotZ : self.sliderRZ}[sender].getFloatValue()
+      print(da)
       if local:
         self.imgToMeshTransform.Translate(-cursorPosition[0],
                                           -cursorPosition[1],
@@ -305,6 +315,18 @@ class FourPaneViewer(QMainWindow, ui):
     self.ResetViews()
     self.SetResliceMode(1)
 
+    self.origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
+
+    # Store initial normals
+
+    self.normals = []
+    
+    src = self.vtk_widgets[0].GetResliceCursor()
+
+    for i in range(3):
+      normal = src.GetPlane(i).GetNormal()
+      self.normals.append(normal)
+    
   def ResetViews(self):
     for i in range(3):
       self.vtk_widgets[i].viewer.Reset()
@@ -526,8 +548,8 @@ class FourPaneViewer(QMainWindow, ui):
     layout.addWidget(self.btnReset1)
     groupLayout.addItem(layout)
 
-    [(self.sliderMX, self.sliderMY, self.sliderMZ),
-     (self.sliderRX, self.sliderRY, self.sliderRZ)] = self.createMovement(groupLayout, self.onSliderPressed, self.onMove)
+    [(self.sliderMTX, self.sliderMTY, self.sliderMTZ),
+     (self.sliderMRX, self.sliderMRY, self.sliderMRZ)] = self.createMovement(groupLayout, self.onSliderPressed, self.onMove)
     groupBox.setLayout(groupLayout)
       
     self.frame.setLayout(vert_layout)
@@ -578,20 +600,20 @@ class FourPaneViewer(QMainWindow, ui):
       slider=QFloatSlider(Qt.Horizontal,self)
       slider.setRange(-20.0, 20.0, 41)
       slider.setFloatValue(0.0)
-      slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-      slider.sliderPressed.connect(lambda: onPressed(0, i))
-      slider.sliderReleased.connect(lambda: onReleased(0, i))
+      slider.floatValueChanged.connect(lambda value, slider=slider, i=i: QToolTip.showText(QCursor.pos(), "T" + chr(88+i) + ": %f" % (value), None))
+      slider.sliderPressed.connect(lambda i=i: onPressed(0, i))
+      slider.sliderReleased.connect(lambda i=i: onReleased(0, i))
       layout0.addWidget(slider)
       controls0.append(slider)
       inLayout.addItem(layout0)
 
       layout1 = QHBoxLayout()
-      slider=QFloatSlider(Qt.Horizontal,self)
+      slider = QFloatSlider(Qt.Horizontal,self)
       slider.setRange(-45.0, 45.0, 91)
       slider.setFloatValue(0.0)
-      slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
-      slider.sliderPressed.connect(lambda: onPressed(1, i))
-      slider.sliderReleased.connect(lambda: onReleased(1, i))
+      slider.floatValueChanged.connect(lambda value, slider=slider, i=i: QToolTip.showText(QCursor.pos(), "R" + chr(88+i) + ": %f" % (value), None))
+      slider.sliderPressed.connect(lambda i=i, slider=slider: onPressed(1, i))
+      slider.sliderReleased.connect(lambda i=i, slider=slider: onReleased(1, i))
       layout1.addWidget(slider)
       controls1.append(slider)
       inLayout.addItem(layout1)
@@ -599,41 +621,73 @@ class FourPaneViewer(QMainWindow, ui):
     return controls0, controls1
 
   def onSliderPressed(self, TR, dim):
-    startVal = {0 : self.startX,
-                1 : self.startY,
-                2 : self.startZ}[dim]
+    if TR == 0:
+      startVal = {0 : self.startX,
+                  1 : self.startY,
+                  2 : self.startZ}[dim]
+    else:
+      startVal = {0 : self.startRX,
+                  1 : self.startRY,
+                  2 : self.startRZ}[dim]
+      
     startVal = self.sender().getFloatValue()
 
   def onResetMovement(self):
     print("Reset movement")
+    self.ResetViews()
+    self.cb.onResliceAxesChanged(self.vtk_widgets[0].viewer.GetResliceCursorWidget(),vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent)
+    self.Render()
+    return
     
   def onMove(self, TR, dim):
-    startVal = {0 : self.startX,
-              1 : self.startY,
-              2 : self.startZ}[dim]
+    # TODO: Support rotate and local movement
+    if TR == 0:
+      startVal = {0 : self.startX,
+                  1 : self.startY,
+                  2 : self.startZ}[dim]
+    else:
+      startVal = {0 : self.startRX,
+                  1 : self.startRY,
+                  2 : self.startRZ}[dim]
+      
     diff = self.sender().getFloatValue() - startVal
     
     origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
     normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(dim).GetNormal()
 
-    # Move origin
-    newOrigin = (origin[0]+diff*normal[0], origin[1]+diff*normal[1], origin[2]+diff*normal[2])
+    newOrigin = origin
 
+    tmp = vtk.vtkTransform()
+    
+    if TR == 0:
+      # Move origin
+      newOrigin = (origin[0]+diff*normal[0], origin[1]+diff*normal[1], origin[2]+diff*normal[2])
+    else:
+      tmp.RotateWXYZ(diff, normal[0], normal[1], normal[2])
+    
     # Set origin of cursor object
     target = self.vtk_widgets[0].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
     for i in range(3):
       target.GetPlane(i).SetOrigin(newOrigin)
+      
+    # Modify normals
+    for i in range(3):
+      newNormal = tmp.TransformVector(target.GetPlane(i).GetNormal())
+      target.GetPlane(i).SetNormal(newNormal)
 
     # Set center for all widgets
     for i in range(3):
       self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor().SetCenter(newOrigin)
 
-    # Execute callback to sync other 2D views and 3D
+    self.Render()
+      
+    # Execute callback to sync contours
     self.cb.onResliceAxesChanged(self.vtk_widgets[dim].viewer.GetResliceCursorWidget(),vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent)
 
     # Reset slider
     self.sender().setFloatValue(0.0)
 
+    
   def ResetSliders(self):
     self.sliderRZ.setFloatValue(0.0)
     self.sliderRX.setFloatValue(0.0)
