@@ -371,13 +371,13 @@ class Viewer3D(QFrame):
       index = (index + 1) % 3
       if (index > -1):
         if isChecked:
-          if len(self.planeWidgets) > 0:
+          if len(self.planeTextActors) > 0:
             self.planeTextActors[index].SetVisibility(False)
             self.planeTextActors[(index+3) % 6].SetVisibility(False)
           self.planeWidgets[index].Off()
         else:
           self.planeWidgets[index].On()
-          if len(self.planeWidgets) > 0:
+          if len(self.planeTextActors) > 0:
             self.planeTextActors[index].SetVisibility(True)
             self.planeTextActors[(index+3) % 6].SetVisibility(True)
     return

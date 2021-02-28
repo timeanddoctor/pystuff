@@ -92,7 +92,7 @@ class Viewer2D(QFrame):
       self.overlay = None
       self.viewer.GetRenderWindow().GetInteractor().Enable()
       
-  def ShowHideCursor(self, visible=False):
+  def ShowCursor(self, visible=False):
     for i in range(3):
       prop = self.viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(i)
       if visible:
@@ -174,15 +174,14 @@ class Viewer2D(QFrame):
     
     return transMat
     
-  def GetScreenImage(self, useOffScreenBuffer=False):
-    # TODO: Fix offscreen reading, if reading offscreen
-    #       they must be enabled earlier
+  def GetScreenImage(self, useOffScreenBuffer=False,
+                     showContours=False):
     image = None
     if useOffScreenBuffer:
-      image = self.readOffScrenBuffer()
+      image = self.readOffScrenBuffer(showContours=showContours)
       image.SetOrigin(0,0,0)
     else:
-      image = self.readOnScreenBuffer()
+      image = self.readOnScreenBuffer(showContours=showContours)
 
     renderer = self.viewer.GetRenderer()      
     coordinate = vtk.vtkCoordinate()
@@ -226,9 +225,9 @@ class Viewer2D(QFrame):
     return image
       
   # Get transformation to screen view
-  def readOffScrenBuffer(self, hideCursor=True,
-                         hideContours=True,
-                         hideAnnotations=True):
+  def readOffScrenBuffer(self, showCursor=True,
+                         showContours=True,
+                         showAnnotations=True):
     renderWindow = self.viewer.GetRenderWindow()
     # Must be done from start
     if not renderWindow.SetUseOffScreenBuffers(True):
@@ -241,13 +240,13 @@ class Viewer2D(QFrame):
     # Fill buffers (important). A single render and a blit is also okay
     renderWindow.Render()
     renderWindow.Frame() #  Perform buffer swap
-    # Hide cursor
-    if hideCursor:
-      self.ShowHideCursor(False)
-    if hideAnnotations:
-      self.ShowHideAnnotations(False)
-    if hideContours:
-      self.ShowHideContours(False)
+
+    if not showCursor:
+      self.ShowCursor(showCursor)
+    if not showAnnotations:
+      self.ShowAnnotations(showAnnotations)
+    if not showContours:
+      self.ShowContours(showContours)
 
     # Render once offscreen - not shown
     renderWindow.Render()
@@ -258,27 +257,27 @@ class Viewer2D(QFrame):
   
     renderWindow.SetUseOffScreenBuffers(False)
 
-    self.ShowHideCursor(True)
-    self.ShowHideAnnotations(True)
-    self.ShowHideContours(True)
+    self.ShowCursor(True)
+    self.ShowAnnotations(True)
+    self.ShowContours(True)
 
     return windowToImageFilter.GetOutput()
         
-  def readOnScreenBuffer(self, hideCursor=True,
-                         hideContours=True,
-                         hideAnnotations=True):
+  def readOnScreenBuffer(self, showCursor=False,
+                         showContours=False,
+                         showAnnotations=False):
     # Read on-screen buffer
     renderWindow = self.viewer.GetRenderWindow()
 
     oldSB = renderWindow.GetSwapBuffers()
     renderWindow.SwapBuffersOff()
     
-    if hideCursor:
-      self.ShowHideCursor(False)
-    if hideAnnotations:
-      self.ShowHideAnnotations(False)
-    if hideContours:
-      self.ShowHideContours(False)
+    if not showCursor:
+      self.ShowCursor(showCursor)
+    if not showAnnotations:
+      self.ShowAnnotations(showAnnotations)
+    if not showContours:
+      self.ShowContours(showContours)
     
     windowToImageFilter = vtk.vtkWindowToImageFilter()
     windowToImageFilter.SetInput(renderWindow)
@@ -292,9 +291,9 @@ class Viewer2D(QFrame):
     renderWindow.SetSwapBuffers(oldSB)
     renderWindow.SwapBuffersOn()
 
-    self.ShowHideCursor(True)
-    self.ShowHideAnnotations(True)
-    self.ShowHideContours(True)
+    self.ShowCursor(True)
+    self.ShowAnnotations(True)
+    self.ShowContours(True)
     return windowToImageFilter.GetOutput()
 
   def resizeCallback(self, widget, event):
@@ -343,7 +342,7 @@ class Viewer2D(QFrame):
     renWin = self.viewer.GetRenderWindow()
     renWin.AddObserver('ModifiedEvent', self.resizeCallback)
 
-  def ShowHideAnnotations(self, show=True):
+  def ShowAnnotations(self, show=True):
     if self.cornerAnnotation is not None:
       self.cornerAnnotation.SetVisibility(show)
 
@@ -418,7 +417,7 @@ class Viewer2D(QFrame):
     # Enable interactor again
     self.viewer.GetRenderWindow().GetInteractor().Enable()
 
-  def ShowHideContours(self, show):
+  def ShowContours(self, show):
     if self.contourActor is not None:
       self.contourActor.SetVisibility(show)
 
@@ -436,9 +435,11 @@ class Viewer2D(QFrame):
   def SetTransform(self, tf):
     self.trans = tf
     self.invTrans = tf.GetInverse()
-    if 0:
+    if 1:
+      # Test if no impact
       self.contourActor.SetUserTransform(tf)
     else:
+      self.adjustment.Identity()
       # New way using extra adjustment
       self.tmp = vtk.vtkTransform() # Stored as a user transform
       self.tmp.PostMultiply()

@@ -17,7 +17,7 @@ class SegmentationTask(QObject):
   def execute(self, arg, trans):
     # Number of Chan-Vese iterations
     nIter = 20
-    std = 1.0 # [mm], original
+    std = 1.5 # [mm], original
     squareSize = 1.5 # [mm]
     
     saveMetaImage = False

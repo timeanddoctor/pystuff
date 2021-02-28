@@ -55,7 +55,8 @@ class RegistrationTask(QObject):
     correctedContours = transformPolyDataFilter1.GetOutput()
     rmse = CloudMeanDist(correctedContours, surface)
 
-    # New
+    # We cannot call Inverse on transform, since it is an ICP and will
+    # issue a registration where source and target are interchanged
     mat = vtk.vtkMatrix4x4()
     mat.DeepCopy(icp.GetMatrix())
     

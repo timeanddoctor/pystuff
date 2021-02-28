@@ -539,7 +539,7 @@ class FourPaneViewer(QMainWindow, ui):
       # Translation
       layout0 = QHBoxLayout()
       slider=QFloatSlider(Qt.Horizontal,self)
-      slider.setRange(-10.0, 10.0, 21)
+      slider.setRange(-50.0, 50.0, 101)
       slider.setFloatValue(0.0)
       slider.floatValueChanged.connect(lambda value: QToolTip.showText(QCursor.pos(), "%f" % (value), None))
       button = QToolButton()
@@ -715,6 +715,7 @@ class Viewer2D(QFrame):
     self.invTrans = None # Inverse
     
     self.adjustment = vtk.vtkTransform() # Move in front
+    #self.adjustment.PostMultiply()
     
     self.iDim = iDim
     self.layout = QHBoxLayout(self)
@@ -866,7 +867,7 @@ class Viewer2D(QFrame):
 
       self.cutEdges.Update()
 
-      # Move in front of image (z-buffer)
+      # Move in front of image (z-buffer) - premultiply
       self.adjustment.Identity()
       self.adjustment.Translate(normal)
 
