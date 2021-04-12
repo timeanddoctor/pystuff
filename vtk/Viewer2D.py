@@ -14,6 +14,9 @@ from vtkUtils import renderLinesAsTubes, AxesToTransform, rotationFromHomogeneou
 
 import math
 
+def myCallback(obj,ev):
+  print(ev)
+
     
 class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
@@ -55,6 +58,8 @@ class Viewer2D(QFrame):
     self.viewer.SetSliceOrientation(iDim)
     self.viewer.SetResliceModeToAxisAligned()
     self.interactor = interactor
+
+    self.interactor.AddObserver('KeyPressEvent', self.KeyPress, 1.0)
 
   def Enable(self):
     self.viewer.GetRenderer().ResetCamera()
@@ -304,7 +309,7 @@ class Viewer2D(QFrame):
     curSize = widget.GetSize()
     if (curSize != self.lastSize):
       self.lastSize = curSize
-    
+ 
       upperRight = vtk.vtkCoordinate()
       upperRight.SetCoordinateSystemToNormalizedDisplay()
       upperRight.SetValue(1.0, 1.0)
@@ -367,6 +372,13 @@ class Viewer2D(QFrame):
     self.cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
     self.viewer.GetRenderer().AddViewProp(self.cornerAnnotation)
 
+  def KeyPress(self, obj, ev):
+    key = obj.GetKeySym()
+    if key == 'u':
+      print('hello')
+      self.UpdateContours()
+      self.viewer.GetResliceCursorWidget().Render()
+    
   def InitializeContours(self, data, color=yellow):
     self.data = data
 
@@ -399,7 +411,10 @@ class Viewer2D(QFrame):
 
     edgeMapper = vtk.vtkPolyDataMapper()
     edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
-          
+
+    # Attach observer to mapper
+    edgeMapper.AddObserver(vtk.vtkCommand.UpdateEvent, myCallback) 
+    
     self.contourActor = vtk.vtkActor()
     self.contourActor.SetMapper(edgeMapper)
     prop = self.contourActor.GetProperty()
@@ -436,7 +451,6 @@ class Viewer2D(QFrame):
     self.trans = tf
     self.invTrans = tf.GetInverse()
     if 1:
-      # Test if no impact
       self.contourActor.SetUserTransform(tf)
     else:
       self.adjustment.Identity()
@@ -444,12 +458,13 @@ class Viewer2D(QFrame):
       self.tmp = vtk.vtkTransform() # Stored as a user transform
       self.tmp.PostMultiply()
 
-      self.tmp.Concatenate(tf)
+      #self.tmp.Concatenate(tf)
+      self.tmp.Concatenate(self.invTrans)
       self.tmp.Concatenate(self.adjustment)
 
       # TEST - no difference
-      #self.tmp.SetInput(self.adjustment)
-      #self.adjustment.SetInput(tf)
+      self.tmp.SetInput(self.adjustment)
+      self.adjustment.SetInput(tf)
       
       # Not good with user transform (issue)
       self.contourActor.SetUserTransform(self.tmp)
@@ -472,9 +487,10 @@ class Viewer2D(QFrame):
         #cutNormal = self.trans.TransformVector(normal)
         #self.trans.Inverse()
         # Current solution
+        # ERROR IS HERE - inv trans should be from last correction only
         cutOrigin = self.invTrans.TransformPoint(origin)
         cutNormal = self.invTrans.TransformVector(normal)
-        
+
       else:
         cutOrigin = origin
         cutNormal = normal
@@ -484,6 +500,7 @@ class Viewer2D(QFrame):
       self.plane.Modified()
 
       # Is this necessary???
+      self.cutEdges.Modified()
       self.cutEdges.Update()
 
       # Move in front of image (z-buffer)
@@ -526,7 +543,7 @@ class Viewer2D(QFrame):
 
       # Issue with memory in transform!!!
       self.contourActor.SetUserTransform(userTransform)
-      
+
   def test(self, caller, ev):
     print('test')
 

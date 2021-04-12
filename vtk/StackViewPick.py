@@ -11,7 +11,8 @@ from PyQt5.uic import loadUiType
 from PyQt5.QtCore import QCoreApplication, Qt, QSettings, QFileInfo
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QSplitter, QAction, QFileDialog, QApplication, QFrame, QStackedWidget, QPushButton
 
-from Viewer2D import Viewer2D, Viewer2DStacked, Viewer3D
+from Viewer2D import Viewer2D, Viewer2DStacked
+from Viewer3D import  Viewer3D
 from vtkUtils import renderLinesAsTubes
 
 ui_file = os.path.join(os.path.dirname(__file__), 'FourPaneViewer.ui')
@@ -240,7 +241,7 @@ class FourPaneViewer(QMainWindow, ui):
     self.vtk_widgets = []
 
     self.viewer3D = Viewer3D(self)
-    self.viewer3D.AddCornerButtons()
+    self.viewer3D.AddPlaneCornerButtons()
 
     # Extra picking stuff
     self.PropPicker = vtk.vtkPropPicker()

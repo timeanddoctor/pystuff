@@ -37,8 +37,24 @@ if __name__ == "__main__":
   fillHoles.SetInputConnection(decimate.GetOutputPort())
   fillHoles.SetHoleSize(20.0)
   fillHoles.Update()
+
+  smoothen = vtk.vtkSmoothPolyDataFilter()
+  smoothen.SetInputConnection(fillHoles.GetOutputPort())
+  smoothen.SetNumberOfIterations(5)
+  smoothen.FeatureEdgeSmoothingOn()
+  smoothen.BoundarySmoothingOff()
+  smoothen.SetFeatureAngle(5)
+  smoothen.SetEdgeAngle(90)
+  smoothen.SetConvergence(0.001)
+  smoothen.SetRelaxationFactor(0.001)
+  smoothen.Update()
   
-  output = fillHoles
+  cleaner = vtk.vtkCleanPolyData()
+  cleaner.SetInputConnection(smoothen.GetOutputPort())
+  cleaner.Update()
+  
+  output = cleaner
+#  output = fillHoles
   
   decimated = vtk.vtkPolyData()
   decimated.ShallowCopy(output.GetOutput())

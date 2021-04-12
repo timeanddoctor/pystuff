@@ -22,10 +22,7 @@ class RegistrationTask(QObject):
     surface = surfaceFilter.GetOutput()
 
     # Invert transform, such that the misalignment can be applied to US data
-    inverse = vtk.vtkTransform()
-    inverse.DeepCopy(alignment)
-    inverse.PostMultiply()
-    inverse.Inverse()
+    inverse = alignment.GetInverse()
 
     # We do not want to move CT data, so we apply the inverse to US
     transformPolyDataFilter0 = vtk.vtkTransformPolyDataFilter()
@@ -55,13 +52,8 @@ class RegistrationTask(QObject):
     correctedContours = transformPolyDataFilter1.GetOutput()
     rmse = CloudMeanDist(correctedContours, surface)
 
-    # We cannot call Inverse on transform, since it is an ICP and will
-    # issue a registration where source and target are interchanged
-    mat = vtk.vtkMatrix4x4()
-    mat.DeepCopy(icp.GetMatrix())
-    
     # Emit done with output
-    self.done.emit(rmse, mat, correctedContours)
+    self.done.emit(rmse, icp, correctedContours)
 
 class RegistrationService(QObject):
   # Signal to emit to perform registration

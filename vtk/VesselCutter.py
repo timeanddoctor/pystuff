@@ -24,13 +24,20 @@ renderWindow.AddRenderer(renderer);
 renderWindowInteractor = vtk.vtkRenderWindowInteractor()
 renderWindowInteractor.SetRenderWindow(renderWindow)
 
-#filename = get_program_parameters()
-filename = os.path.join(filedir, '../../fis/data/Abdomen/ProperlyClosed.vtp')
+filename = get_program_parameters()
+#filename = os.path.join(filedir, '../../fis/data/Abdomen/ProperlyClosed.vtp')
 
-reader = vtk.vtkXMLPolyDataReader()
-reader.SetFileName(filename)
-reader.Update()
+fname, extension = os.path.splitext(filename)
 
+if extension == '.vtp':
+  reader = vtk.vtkXMLPolyDataReader()
+  reader.SetFileName(filename)
+  reader.Update()
+else:
+  reader = vtk.vtkSTLReader()
+  reader.SetFileName(filename)
+  reader.Update()
+  
 global polydata
 polydata = reader.GetOutput()
 
@@ -57,18 +64,21 @@ center = polydata.GetCenter()
 # Implicit function for clipping
 plane = vtk.vtkPlane()
 plane.SetOrigin(bounds[0], bounds[2], center[2])
-plane.SetNormal(0, 0, 1)
+plane.SetNormal(1.0, 0, 0)
 plane.Modified()
 
 def BeginInteraction(obj,ev):
-  print('Begin Interaction')
+  a = 1
+  #print('Begin Interaction')
 
 def EndInteraction(obj,ev):
-  print('End Interaction')
+  a = 1
+  #print('End Interaction')
 
 planeWidget = vtk.vtkPlaneWidget()
 planeWidget.SetInputData(polydata)
-planeWidget.NormalToZAxisOn()
+#planeWidget.NormalToXAxisOn()
+planeWidget.SetResolution(10)
 planeWidget.SetInteractor(renderWindow.GetInteractor())
 planeWidget.AddObserver("EnableEvent", BeginInteraction)
 planeWidget.AddObserver("StartInteractionEvent", BeginInteraction)
@@ -76,8 +86,9 @@ planeWidget.AddObserver("InteractionEvent", EndInteraction)
 
 planeWidget.SetEnabled(0)
 planeWidget.SetOrigin(bounds[0], bounds[2], center[2])
-planeWidget.SetPoint1(bounds[0], bounds[3], center[2])
-planeWidget.SetPoint2(bounds[1], bounds[2], center[2])
+planeWidget.SetPoint2(bounds[0], bounds[3], center[2])
+planeWidget.SetPoint1(bounds[1], bounds[2], center[2])
+planeWidget.SetNormal(-1.0,0,0)
 planeWidget.Modified()
 prop = planeWidget.GetPlaneProperty()
 prop.SetColor( .2, .8, 0.1 )
@@ -126,6 +137,7 @@ def KeyPress(obj, ev):
     planeWidget.SetOrigin(bounds[0], bounds[2], center[2])
     planeWidget.SetPoint1(bounds[0], bounds[3], center[2])
     planeWidget.SetPoint2(bounds[1], bounds[2], center[2])
+    planeWidget.SetNormal(1.0, 0, 0)
     planeWidget.Modified()
     planeWidget.SetEnabled(1)
     return
@@ -133,7 +145,9 @@ def KeyPress(obj, ev):
     # Implicit function for clipping
     plane = vtk.vtkPlane()
     plane.SetOrigin(planeWidget.GetOrigin())
-    plane.SetNormal(planeWidget.GetNormal())
+    # Hack
+    normal = planeWidget.GetNormal()
+    plane.SetNormal(-normal[0], normal[1], normal[2])
     plane.Modified()
 
     clipper = vtk.vtkClipPolyData()
@@ -172,6 +186,12 @@ def KeyPress(obj, ev):
       renderer.RemoveActor(lastActor)
       lastActor = None
 
+    # Save clipping
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputConnection(cleanFilter.GetOutputPort())
+    writer.SetFileName('./output.vtp')
+    writer.Write()
+    
     normals = vtk.vtkPolyDataNormals()
     normals.SetInputConnection(cleanFilter.GetOutputPort())
 

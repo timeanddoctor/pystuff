@@ -173,7 +173,15 @@ class Viewer2D(QFrame):
                                normal1, first1, origin1)
     
     return transMat
-    
+
+  def GetOrigin(self):
+    cursor = self.viewer.GetResliceCursor()
+    return cursor.GetPlane(self.iDim).GetOrigin()
+
+  def GetNormal(self):
+    cursor = self.viewer.GetResliceCursor()
+    return cursor.GetPlane(self.iDim).GetNormal()
+  
   def GetScreenImage(self, useOffScreenBuffer=False,
                      showContours=False):
     image = None
@@ -346,8 +354,7 @@ class Viewer2D(QFrame):
     if self.cornerAnnotation is not None:
       self.cornerAnnotation.SetVisibility(show)
 
-  def SetInputData(self, data):
-    self.viewer.SetInputData(data)
+  def SetCornorAnnotations(self):
     # Corner annotation, can use <slice>, <slice_pos>, <window_level>
     self.cornerAnnotation = vtk.vtkCornerAnnotation()
     self.cornerAnnotation.SetLinearFontScaleFactor(2)
@@ -366,10 +373,12 @@ class Viewer2D(QFrame):
     
     self.cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
     self.viewer.GetRenderer().AddViewProp(self.cornerAnnotation)
-
-  def InitializeContours(self, data, color=yellow):
-    self.data = data
-
+    
+  def SetInputData(self, data):
+    self.viewer.SetInputData(data)
+    self.SetCornorAnnotations()
+    
+  def InitializeContours(self, contourData, color=yellow):
     # Disable interactor
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
@@ -385,31 +394,34 @@ class Viewer2D(QFrame):
     normal = ps.GetNormal()
     self.plane.SetNormal(normal)
 
+    # We ignore empty ouput (in C++)
+    
+    # Transform polydata according to misplacement
+    self.transformPolyDataFilter = vtk.vtkTransformPolyDataFilter()
+    self.transformPolyDataFilter.SetInputConnection(contourData.GetOutputPort())
+    self.transformPolyDataFilter.SetTransform(self.transform)
+
     # Generate line segments
     self.cutEdges = vtk.vtkCutter()
-    self.cutEdges.SetInputConnection(self.data.GetOutputPort())
+    self.cutEdges.SetInputConnection(self.transformPolyDataFilter.GetOutputPort())
     self.cutEdges.SetCutFunction(self.plane)
     self.cutEdges.GenerateCutScalarsOff()
     self.cutEdges.SetValue(0, 0.5)
-          
+    self.cutEdges.Update()
+
     # Put together into polylines
-    cutStrips = vtk.vtkStripper()
-    cutStrips.SetInputConnection(self.cutEdges.GetOutputPort())
-    cutStrips.Update()
+    self.cutStrips = vtk.vtkStripper()
+    self.cutStrips.SetInputConnection(self.cutEdges.GetOutputPort())
+    self.cutStrips.Update()
 
     edgeMapper = vtk.vtkPolyDataMapper()
-    edgeMapper.SetInputConnection(cutStrips.GetOutputPort())
+    edgeMapper.SetInputConnection(self.cutStrips.GetOutputPort())
           
     self.contourActor = vtk.vtkActor()
     self.contourActor.SetMapper(edgeMapper)
     prop = self.contourActor.GetProperty()
     renderLinesAsTubes(prop)
-    prop.SetColor(color) # If Scalars are extracted - they turn green
-
-    # Move in front of image (is this necessary?)
-    transform = vtk.vtkTransform()
-    transform.Translate(normal)
-    self.contourActor.SetUserTransform(transform)
+    prop.SetColor(color)
 
     # Add actor to renderer
     self.viewer.GetRenderer().AddViewProp(self.contourActor)
@@ -432,27 +444,8 @@ class Viewer2D(QFrame):
       self.viewer.GetRenderWindow().GetInteractor().Disable()
       self.viewer.GetRenderWindow().GetInteractor().Enable()
 
-  def SetTransform(self, tf):
-    self.trans = tf
-    self.invTrans = tf.GetInverse()
-    if 1:
-      # Test if no impact
-      self.contourActor.SetUserTransform(tf)
-    else:
-      self.adjustment.Identity()
-      # New way using extra adjustment
-      self.tmp = vtk.vtkTransform() # Stored as a user transform
-      self.tmp.PostMultiply()
-
-      self.tmp.Concatenate(tf)
-      self.tmp.Concatenate(self.adjustment)
-
-      # TEST - no difference
-      #self.tmp.SetInput(self.adjustment)
-      #self.adjustment.SetInput(tf)
-      
-      # Not good with user transform (issue)
-      self.contourActor.SetUserTransform(self.tmp)
+  def SetTransform(self, transform):
+    self.transform = transform
 
   def UpdateContours(self):
     # Alternatively, one could transform the the vtkPlane using

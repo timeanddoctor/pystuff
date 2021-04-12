@@ -1,25 +1,7 @@
 #!/bin/env python3
 
-# AVOID SetMatrix on chains!!!!
-
-# TODO:
-# 1. Sliders from RotContourViewer
-# 2. Reg matrix in RegService
-# 3. Display translation error, angle error, dot product. (deg, x,y,z) = self.alignment.GetOrientationWXYZ()
-
-# 4. Dump to file, 1mm, 2mm, 5mm, 10mm
-# 5. Perform bifurcation in-plane
-#    a. in-plane translation (x2)
-#    b. out-of-plane translation
-# 6. Vessel in-plane
-#    a. in-plane translation (x2)
-#    b. out-of-plane translation
-# 7. Crossing vessels
-#    a. in-plane translation (x2)
-#    b. out-of-plane translation
-
-# Something works, but red moves
-
+# 1. Load surface
+# 
 import os
 import sys
 import math
@@ -195,106 +177,64 @@ class SmartLock(QMainWindow, ui):
     self.DEFAULT_DIR_KEY = __file__
     self.segServer = SegmentationService(self)
     self.regServer = RegistrationService(self)
-    self.usActor = None # Used for overlay
-    self.usCorrectedActor = None
-    self.lastUSContours = None
 
-    self.vessel = None
+    self.usOverlayActor = None # Overlay
+
+    self.usCorrectedActor = None # Corrected contours in 3D
     
-    # Update this when load interior and exterior
-    self.CTContours = None
-
     # Append all surfaces to this
     self.appendFilter = vtk.vtkAppendPolyData()
 
-    # TODO: Consider using SetInput
+    # Single transform
     self.alignment = vtk.vtkTransform()
-    self.alignment.Identity() # Never change using SetMatrix
-    self.alignment.PostMultiply()
 
-    self.misAlignment = vtk.vtkTransform()
-    self.misAlignment.PostMultiply()
-    
-    self.regAlignment = vtk.vtkTransform()
-    self.regAlignment.PostMultiply()
-
-    #self.alignment.Concatenate(self.misAlignment)
-    #self.alignment.Concatenate(self.regAlignment)
-
-    self.alignment.SetInput(self.regAlignment)
-    self.regAlignment.SetInput(self.misAlignment)
-
-    # TEST (No difference)
-    #self.misAlignment.SetInput(self.regAlignment)
-    #self.regAlignment.SetInput(self.alignment)
+    # Experiment with 2 transforms
+    self.registration = vtk.vtkTransform()
+    self.alignment.SetInput(self.registration)
     
   def onArrowsClicked(self, _view, _direction):
-    self.misAlignment.PreMultiply()
     if _view == azel.AZ:
       first, second, normal = self.viewUS[1].GetDirections()
       if (_direction == direction.RIGHT):
         # Modify transformation 
         vtk.vtkMath.MultiplyScalar(first, deltaXYZ)
-        self.misAlignment.Translate(first)
+        self.alignment.Translate(first)
       elif (_direction == direction.LEFT):
         vtk.vtkMath.MultiplyScalar(first, -deltaXYZ)
-        self.misAlignment.Translate(first)
+        self.alignment.Translate(first)
       elif (_direction == direction.UP):
         # You cannot get and set matrix????
         vtk.vtkMath.MultiplyScalar(second, deltaXYZ)
-        self.misAlignment.Translate(second)
+        self.alignment.Translate(second)
       elif (_direction == direction.DOWN):
         vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
-        self.misAlignment.Translate(second)
-      # Do we need this?
-      self.misAlignment.PostMultiply()
-      self.regAlignment.Identity()
-      self.regAlignment.Concatenate(self.misAlignment)
-      self.alignment.Identity()
-      self.alignment.Concatenate(self.regAlignment)
-      print(self.misAlignment.GetNumberOfConcatenatedTransforms())
+        self.alignment.Translate(second)
     elif _view == azel.EL:
       first, second, normal = self.viewUS[0].GetDirections()
       if (_direction == direction.RIGHT):
         # Modify transformation 
         vtk.vtkMath.MultiplyScalar(first, deltaXYZ)
-        self.misAlignment.Translate(first)
+        self.alignment.Translate(first)
       elif (_direction == direction.LEFT):
         vtk.vtkMath.MultiplyScalar(first, -deltaXYZ)
-        self.misAlignment.Translate(first)
+        self.alignment.Translate(first)
       elif (_direction == direction.UP):
         vtk.vtkMath.MultiplyScalar(second, deltaXYZ)
-        self.misAlignment.Translate(second)
+        self.alignment.Translate(second)
       elif (_direction == direction.DOWN):
         vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
-        self.misAlignment.Translate(second)
-      # VERY IMPORTANT
-      # Do we need this?
-      self.misAlignment.PostMultiply()
-      self.regAlignment.Identity()
-      self.regAlignment.Concatenate(self.misAlignment)
-      self.alignment.Identity()
-      self.alignment.Concatenate(self.regAlignment)
+        self.alignment.Translate(second)
       
     elif _view == azel.RESET:
-      # Remove actors from 3D
-      if self.usActor is not None or self.usCorrectedActor is not None:
-        self.viewer3D.interactor.Disable()
-        if self.usCorrectedActor is not None:
-          self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usCorrectedActor)
-          self.usCorrectedActor = None
-        if self.usActor is not None:
-          self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usActor)
-          self.usActor = None
-        self.viewer3D.interactor.Enable()
-        #self.viewer3D.planeWidgets[0].GetInteractor().GetRenderWindow().Render()
-      self.viewUS[1].RemoveOverlay()
-      self.misAlignment.Identity()
-      self.regAlignment.Identity()
+      #self.alignment.Identity() # Equal the input - the registration (not good)
 
-    # Triggers entire chain
-    self.alignment.Update()
-    
+      dummy = vtk.vtkTransform()
+      self.alignment.SetInput(dummy)
+      self.alignment.Identity()
+      # 
+      self.registration = vtk.vtkTransform()
+      self.alignment.SetInput(self.registration)
+
     # Update contours
     for i in range(2):
       self.viewUS[i].UpdateContours()
@@ -398,8 +338,8 @@ class SmartLock(QMainWindow, ui):
 
     # Transform from xy-plane to current plane
     transMat = self.viewUS[1].GetScreenTransform()
-    self.trans = vtk.vtkTransform()
-    self.trans.SetMatrix(transMat)
+    self.screenToWorldTransform = vtk.vtkTransform()
+    self.screenToWorldTransform.SetMatrix(transMat)
 
     if showCoordinates:
       # Center of plane
@@ -417,11 +357,11 @@ class SmartLock(QMainWindow, ui):
     # Write misalignment to output
     ################################
 
-    displacementError = self.misAlignment.GetPosition()
+    displacementError = self.alignment.GetPosition()
 
     # Screen rotation
     screenRot = vtk.vtkTransform()
-    screenRot.DeepCopy(self.trans)
+    screenRot.DeepCopy(self.screenToWorldTransform)
     screenRot.PostMultiply()
     # Remove translation
     pos = screenRot.GetPosition()
@@ -429,6 +369,12 @@ class SmartLock(QMainWindow, ui):
     # World to screen rotation
     screenRot.Inverse()
 
+    # Location
+    segOrigin = self.viewUS[1].GetOrigin()
+    segNormal = self.viewUS[1].GetNormal()
+    print('Origin: (%3.2f, %3.2f, %3.2f)' % (segOrigin[0], segOrigin[1], segOrigin[2]))
+    print('Normal: (%3.2f, %3.2f, %3.2f)' % (segNormal[0], segNormal[1], segNormal[2]))
+    
     # Displacement on screen [mm]
     screenDisplacmentError = screenRot.TransformPoint(displacementError)
     sys.stdout.write('dx: %3.2f [mm], dy: %3.2f [mm], dz: %3.2f [mm]\n' %\
@@ -437,7 +383,7 @@ class SmartLock(QMainWindow, ui):
                       screenDisplacmentError[2]))
 
     # Rotation error on screen
-    deg, xAxis, yAxis, zAxis = self.misAlignment.GetOrientationWXYZ()
+    deg, xAxis, yAxis, zAxis = self.alignment.GetOrientationWXYZ()
     normal = self.viewUS[1].GetResliceCursor().GetPlane(self.viewUS[1].iDim).GetNormal()
     dotNAxis = xAxis*normal[0] + yAxis*normal[1] + zAxis*normal[2]
     sys.stdout.write('da: %3.2f [degrees], (axis.N): %3.2f\n' % (deg, dotNAxis))
@@ -446,29 +392,10 @@ class SmartLock(QMainWindow, ui):
     self.segServer.ready.connect(self.updateSegmentation)
 
     # For VTK version 8.2, we need to add the orientation as a
-    # separate parameter, self.trans
-    self.segServer.execute.emit(self.segImage, self.trans)
+    # separate parameter, self.screenToWorldTransform
+    self.segServer.execute.emit(self.segImage, self.screenToWorldTransform)
 
-  @pyqtSlot(float, 'PyQt_PyObject', 'PyQt_PyObject')
-  def updateRegistration(self, rmse, mat, newContours):
-    print('RMSE: %f' % (rmse))
-
-    # TEST AVOID INVERTING
-    invMat = vtk.vtkMatrix4x4()
-    vtk.vtkMatrix4x4.Invert(mat, invMat)
-
-    # NOT GOOD - concatenate invMat to existing
-    # PROBLEM
-    self.regAlignment.SetMatrix(invMat)
-    self.regAlignment.Update()
-
-    print(invMat)
-    print(self.regAlignment.GetMatrix())
-
-    for i in range(len(self.viewUS)):
-      self.viewUS[i].UpdateContours()
-      self.viewUS[i].viewer.GetResliceCursorWidget().Render()
-
+  def updateRegistration3D(self, newContours):
     if self.usCorrectedActor is not None:
       self.viewer3D.interactor.Disable()
       self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usCorrectedActor)
@@ -490,25 +417,53 @@ class SmartLock(QMainWindow, ui):
     self.usCorrectedActor = vtk.vtkActor()
     self.usCorrectedActor.SetMapper(edgeMapper)
 
-    
-    self.usCorrectedActor.SetUserTransform(self.alignment)
     prop = self.usCorrectedActor.GetProperty()
     prop.SetColor(yellow)
     
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usCorrectedActor)
+    
+      
+  @pyqtSlot(float, 'PyQt_PyObject', 'PyQt_PyObject')
+  def updateRegistration(self, rmse, icp, newContours):
+    print('RMSE: %f' % (rmse))
 
-    # GetMatrix is the entire product, SetMatrix is only the local
+    for i in range(len(self.viewUS)):
+      self.viewUS[i].UpdateContours()
+      self.viewUS[i].viewer.GetResliceCursorWidget().Render()
 
-    what = self.regAlignment # Why not alignment
+    self.updateRegistration3D(newContours)
+
+    # Form the error matrix
+    self.regAlignment = vtk.vtkTransform()
+    self.regAlignment.SetMatrix(icp.GetMatrix())
+    self.regAlignment.Inverse()
+
+    misMatrix = self.alignment.GetMatrix()
+    regMatrix = self.regAlignment.GetMatrix()
+    errMatrix = vtk.vtkMatrix4x4()
+    vtk.vtkMatrix4x4.Multiply4x4(misMatrix, regMatrix, errMatrix)
+
+    errorTransform = vtk.vtkTransform()
+    errorTransform.SetMatrix(errMatrix)
+
+    what = errorTransform
     
     # Print error after registration to output, TODO: Project to plane
     posError = what.GetPosition()
-    print(self.regAlignment.GetMatrix())
-    print(posError)
     absPosError = math.sqrt(posError[0]**2+posError[1]**2+posError[2]**2)
     sys.stdout.write('dp: %3.2f [mm]\n' % (absPosError))
     angleError, xAxis, yAxis, zAxis = what.GetOrientationWXYZ()
     sys.stdout.write('da: %3.2f [degrees]\n' % (angleError))
+
+    # Works once
+    #self.alignment.PostMultiply()
+    #self.alignment.Concatenate(self.regAlignment) # Works
+
+    
+    # Product of two - set matrix of self.registration
+    self.registration.SetMatrix(regMatrix)
+
+    # TODO: Check if self.aligment is updated immediately and switch input
     
     self.btnReg.setEnabled(True)
     self.Render()
@@ -520,23 +475,23 @@ class SmartLock(QMainWindow, ui):
     edgeMapper = vtk.vtkPolyDataMapper()
     edgeMapper.SetInputData(self.lastUSContours)
     
-    if self.usActor is not None:
+    if self.usOverlayActor is not None:
       self.viewer3D.interactor.Disable()
-      self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usActor)
+      self.viewer3D.planeWidgets[0].GetDefaultRenderer().RemoveActor(self.usOverlayActor)
       self.viewer3D.interactor.Enable()
-      self.usActor = None
+      self.usOverlayActor = None
     
     # Add contours in 3D space (misaligned)
-    self.usActor = vtk.vtkActor()
-    self.usActor.SetMapper(edgeMapper)
-    prop = self.usActor.GetProperty()
+    self.usOverlayActor = vtk.vtkActor()
+    self.usOverlayActor.SetMapper(edgeMapper)
+    prop = self.usOverlayActor.GetProperty()
     renderLinesAsTubes(prop)
     prop.SetPointSize(4)
     prop.SetLineWidth(3)
 
     # US contours move opposite of CT contours (was .GetInverse)
-    self.usActor.SetUserTransform(self.misAlignment)
-    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usActor)
+    self.usOverlayActor.SetUserTransform(self.alignment)
+    self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(self.usOverlayActor)
 
     # Add overlay to 2D ultrasound
     self.viewUS[1].AddOverlay(contours)
@@ -544,6 +499,7 @@ class SmartLock(QMainWindow, ui):
     self.Render()
 
   def onRegClicked(self):
+    self.btnReg.setEnabled(False)
     print("Registration")
     if self.lastUSContours is not None:
       self.btnReg.setEnabled(False)
@@ -552,22 +508,10 @@ class SmartLock(QMainWindow, ui):
       # Callback for displaying segmentation
       self.regServer.ready.connect(self.updateRegistration)
       
-      dummy = vtk.vtkTransform()
-      dummy.PostMultiply()
-      dummy.DeepCopy(self.misAlignment)
-
-#     This goes crazy
-#      dummy = vtk.vtkTransform()
-#      dummy.SetMatrix(self.misAlignment.GetMatrix())
-#      dummy.PostMultiply()
-
-      
-      print("MIS")
-      print(dummy.GetMatrix())
-      # No need it is already copied
-      self.regServer.execute.emit(self.lastUSContours, dummy, self.appendFilter)
+      self.regServer.execute.emit(self.lastUSContours, self.alignment, self.appendFilter)
       
       self.Render()
+    self.btnReg.setEnabled(True)
     
   def onApplyPresetClicked(self, index):
     window = 200
@@ -742,7 +686,6 @@ class SmartLock(QMainWindow, ui):
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
     prop = actor.GetProperty()
-
     
     if index == 0:
       # Veins
@@ -754,21 +697,22 @@ class SmartLock(QMainWindow, ui):
     # Assign actor to the renderer
     prop.SetOpacity(0.35)
     self.viewer3D.planeWidgets[0].GetDefaultRenderer().AddActor(actor)
-    
-    # 2D Views
+
     polyData = normals.GetOutput()
     
     self.appendFilter.AddInputData(polyData)
     self.appendFilter.Update()
-    
-    # TODO: Make this work if read before US
-    for i in range(self.stackCT.count()):
-      self.stackCT.widget(i).InitializeContours(self.appendFilter,color=pink)
+    dummy = self.appendFilter.GetOutput()
+
+    # 2D Views
+
+    if 0:
+      for i in range(self.stackCT.count()):
+        self.stackCT.widget(i).InitializeContours(self.appendFilter,color=pink)
 
     for i in range(len(self.viewUS)):
-      self.viewUS[i].InitializeContours(self.appendFilter)
-      # TODO: Assign instead product of two identity matrices
       self.viewUS[i].SetTransform(self.alignment)
+      self.viewUS[i].InitializeContours(self.appendFilter)
 
     self.Render()
 
@@ -796,7 +740,6 @@ class SmartLock(QMainWindow, ui):
       self.viewUS[i].viewer.GetRenderer().ResetCamera()
       self.viewUS[i].viewer.GetInteractor().EnableRenderOn()
 
-      
     # Enable interactors
     for i in range(len(self.viewUS)):
       self.viewUS[i].viewer.GetInteractor().Enable()
@@ -804,6 +747,7 @@ class SmartLock(QMainWindow, ui):
     self.ResetUSViews()
     self.SetUSResliceMode(1) # Oblique
     self.Render()
+
   def loadFile(self, fileName):
     # Load VTK Meta Image
     reader = vtk.vtkMetaImageReader()
@@ -918,11 +862,13 @@ class SmartLock(QMainWindow, ui):
       self.stackCT.widget(i).viewer.SetResliceMode(mode)
       self.stackCT.widget(i).viewer.GetRenderer().ResetCamera()
       self.stackCT.widget(i).viewer.Render()
+
   def SetUSResliceMode(self, mode):
     for i in range(len(self.viewUS)):
       self.viewUS[i].viewer.SetResliceMode(mode)
       self.viewUS[i].viewer.GetRenderer().ResetCamera()
       self.viewUS[i].viewer.Render()
+
   def closeEvent(self, event):
     # Stops the renderer such that the application can close without issues
     self.stackCT.close()
@@ -947,15 +893,15 @@ if __name__ == '__main__':
   if len(sys.argv) > 1:
     mySettings = QSettings()
     fileDir = mySettings.value(main_window.DEFAULT_DIR_KEY)
-    main_window.loadFile(os.path.join(fileDir,defaultFiles[0])) # CT
-    main_window.loadSurface(os.path.join(fileDir,defaultFiles[1]),0)  # Vessels
     if int(sys.argv[1]) == 1:
       main_window.loadUSFile(os.path.join(fileDir,defaultFiles[3])) # US
+      main_window.loadSurface(os.path.join(fileDir,defaultFiles[1]),0)  # Vessels
+      main_window.loadSurface(os.path.join(fileDir,defaultFiles[2]),1) # Surface
     elif int(sys.argv[1]) == 2:
       main_window.loadUSFile(os.path.join(fileDir,defaultFiles[5])) # White
+      main_window.loadSurface(os.path.join(fileDir,defaultFiles[1]),0)  # Vessels
     else:
       main_window.loadUSFile(os.path.join(fileDir,defaultFiles[4])) # NoBound
-#    main_window.loadSurface(os.path.join(fileDir,defaultFiles[2]),1) # Surface
   
   sys.exit(app.exec_())
 

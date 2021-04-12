@@ -42,8 +42,8 @@ namedColors = vtk.vtkNamedColors()
 # Create a vtkUnsignedCharArray container and store the colors in it
 colors = vtk.vtkUnsignedCharArray()
 colors.SetNumberOfComponents(3)
-colors.InsertNextTupleValue(namedColors.GetColor3ub("Tomato").GetData())
-colors.InsertNextTupleValue(namedColors.GetColor3ub("Mint").GetData())
+colors.InsertNextTypedTuple(namedColors.GetColor3ub("Tomato"))
+colors.InsertNextTypedTuple(namedColors.GetColor3ub("Mint"))
 
 # Color the lines.
 # SetScalars() automatically associates the values in the data array passed as parameter
@@ -64,7 +64,7 @@ actor.GetProperty().SetLineWidth(4)
 
 renderer = vtk.vtkRenderer()
 renderer.AddActor(actor)
-renderer.SetBackground(namedColors.GetColor3d("SlateGray").GetData())
+renderer.SetBackground(namedColors.GetColor3d("SlateGray"))
 
 window = vtk.vtkRenderWindow()
 window.SetWindowName("Colored Lines")

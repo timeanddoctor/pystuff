@@ -133,7 +133,7 @@ class SegmentationService(QObject):
     self.ready.emit(arg)
         
   def cleanUp(self):
-    # TODO: Call this when parent is destroyed
+    # Not working as expected if never used
     self.worker.deleteLater()
     self.worker = None
     self.workerThread.quit()

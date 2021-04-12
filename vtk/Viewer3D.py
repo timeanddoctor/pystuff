@@ -128,7 +128,7 @@ class Viewer3D(QFrame):
       self.planeWidgets[i].GetInteractor().Enable()
       self.planeWidgets[i].On()
       self.planeWidgets[i].InteractionOn()
-
+      
     if self.showOrientation:
       self.AddOrientationWidget(version=1)
 

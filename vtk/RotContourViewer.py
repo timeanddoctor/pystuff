@@ -88,7 +88,6 @@ class ResliceCallback(object):
       main_window.vtk_widgets[0].viewer.SetColorLevel(wl[1])
     self.render()
   def onRender(self, caller, ev):
-    print('hello')
     self.render()
   def render(self):
     # Render views
@@ -123,14 +122,9 @@ class FourPaneViewer(QMainWindow, ui):
     """
     Blue widget. TODO: Try to actually rotate mesh instead
     """
-    print("clicked")
     sender = self.sender()
-    print(sender)
-    print(self.btnRotZ)
-    print(self.sliderRZ.getFloatValue())
     local = self.btnLocal.isChecked()
 
-    print(local)
     widget = self.vtk_widgets[2]
 
     vx, vy, vn = widget.GetOrientation()
@@ -149,7 +143,6 @@ class FourPaneViewer(QMainWindow, ui):
       da = {self.btnRotX : self.sliderRX,
             self.btnRotY : self.sliderRY,
             self.btnRotZ : self.sliderRZ}[sender].getFloatValue()
-      print(da)
       if local:
         self.imgToMeshTransform.Translate(-cursorPosition[0],
                                           -cursorPosition[1],
@@ -243,8 +236,6 @@ class FourPaneViewer(QMainWindow, ui):
     self.vessels = vtk.vtkActor()
     self.vessels.SetMapper(mapper)
     prop = self.vessels.GetProperty()
-    #prop.SetColor(vtk.vtkColor3d(hexCol("#517487"))) # 25% lighter
-    #prop.SetOpacity(0.35)
     prop.SetColor(red)
     prop.SetOpacity(1.0)
 
@@ -506,6 +497,8 @@ class FourPaneViewer(QMainWindow, ui):
     groupBox = QGroupBox("Misalignment")
     vert_layout.addWidget(groupBox)
     mis_layout = QVBoxLayout()
+
+    # Misalignment
     
     # Local and reset
     horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -528,6 +521,8 @@ class FourPaneViewer(QMainWindow, ui):
      (self.sliderRY, self.btnRotY),
      (self.sliderRZ, self.btnRotZ)] = self.createMisAlignment(mis_layout, self.onOrientationClicked)
     groupBox.setLayout(mis_layout)
+
+    # Movement
     
     groupBox = QGroupBox("Movement")
     vert_layout.addWidget(groupBox)
@@ -537,13 +532,13 @@ class FourPaneViewer(QMainWindow, ui):
     horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
     
     # TODO: Return values
-    self.btnLocal1 = QCheckBox("local")
+    self.btnMoveLocal = QCheckBox("local")
     self.btnReset1 = QPushButton("Reset")
     self.btnReset1.clicked.connect(self.onResetMovement)
     
     # Movement sliders
     layout = QHBoxLayout()
-    layout.addWidget(self.btnLocal1)
+    layout.addWidget(self.btnMoveLocal)
     layout.addSpacerItem(horzSpacer)
     layout.addWidget(self.btnReset1)
     groupLayout.addItem(layout)
@@ -598,7 +593,7 @@ class FourPaneViewer(QMainWindow, ui):
     for i in range(3):
       layout0 = QHBoxLayout()
       slider=QFloatSlider(Qt.Horizontal,self)
-      slider.setRange(-20.0, 20.0, 41)
+      slider.setRange(-50.0, 50.0, 101)
       slider.setFloatValue(0.0)
       slider.floatValueChanged.connect(lambda value, slider=slider, i=i: QToolTip.showText(QCursor.pos(), "T" + chr(88+i) + ": %f" % (value), None))
       slider.sliderPressed.connect(lambda i=i: onPressed(0, i))
@@ -651,18 +646,32 @@ class FourPaneViewer(QMainWindow, ui):
                   2 : self.startRZ}[dim]
       
     diff = self.sender().getFloatValue() - startVal
+
+    local = self.btnMoveLocal.isChecked()
+    
+    # For local transformations
+    vx, vy, vz = self.vtk_widgets[0].GetOrientation()
     
     origin = self.vtk_widgets[0].GetResliceCursor().GetCenter()
     normal = self.vtk_widgets[0].GetResliceCursor().GetPlane(dim).GetNormal()
-
+    
     newOrigin = origin
 
     tmp = vtk.vtkTransform()
     
     if TR == 0:
       # Move origin
-      newOrigin = (origin[0]+diff*normal[0], origin[1]+diff*normal[1], origin[2]+diff*normal[2])
+      if local:
+        vtk.vtkMath.MultiplyScalar(vx, diff)
+        vtk.vtkMath.MultiplyScalar(vy, diff)
+        vtk.vtkMath.MultiplyScalar(vz, diff)
+        newOrigin = (origin[0] + vx[0] + vy[0] + vz[0],
+                     origin[1] + vx[1] + vy[1] + vz[1],
+                     origin[2] + vx[2] + vy[2] + vz[2])
+      else:
+        newOrigin = (origin[0]+diff*normal[0], origin[1]+diff*normal[1], origin[2]+diff*normal[2])
     else:
+      # Rotation around normal
       tmp.RotateWXYZ(diff, normal[0], normal[1], normal[2])
     
     # Set origin of cursor object

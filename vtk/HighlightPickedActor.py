@@ -11,15 +11,15 @@ class MouseInteractorHighLightActor(vtk.vtkInteractorStyleTrackballCamera):
 
         self.LastPickedActor = None
         self.LastPickedProperty = vtk.vtkProperty()
-
+        self.picker = vtk.vtkPropPicker()
     def leftButtonPressEvent(self, obj, event):
         clickPos = self.GetInteractor().GetEventPosition()
 
-        picker = vtk.vtkPropPicker()
-        picker.Pick(clickPos[0], clickPos[1], 0, self.GetDefaultRenderer())
+        #picker = vtk.vtkPropPicker()
+        self.picker.Pick(clickPos[0], clickPos[1], 0, self.GetDefaultRenderer())
 
         # get the new
-        self.NewPickedActor = picker.GetActor()
+        self.NewPickedActor = self.picker.GetActor()
 
         # If something was selected
         if self.NewPickedActor:
@@ -37,6 +37,7 @@ class MouseInteractorHighLightActor(vtk.vtkInteractorStyleTrackballCamera):
 
             # save the last picked actor
             self.LastPickedActor = self.NewPickedActor
+            
 
         self.OnLeftButtonDown()
         return

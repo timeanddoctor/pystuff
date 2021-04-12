@@ -355,6 +355,28 @@
             </widget>
            </item>
            <item>
+            <widget class="QPushButton" name="btnBranches">
+             <property name="text">
+              <string>Branches</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="cboxBranches">
+             <property name="geometry">
+              <rect>
+               <x>120</x>
+               <y>60</y>
+               <width>53</width>
+               <height>22</height>
+              </rect>
+             </property>
+            </widget>
+           </item>
+           <item>
             <spacer name="horizontalSpacer_4">
              <property name="orientation">
               <enum>Qt::Horizontal</enum>
