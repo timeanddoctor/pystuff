@@ -34,7 +34,7 @@ class ViewersApp(QMainWindow, ui):
 
     self.floatSlider = []
     for index in range(nSliders):
-      tmp = QFloatSlider(self, Qt.Horizontal)
+      tmp = QFloatSlider(Qt.Horizontal, self)
       self.floatSlider.append(tmp)
       self.verticalSliderLayout.addWidget(tmp)
 
