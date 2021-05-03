@@ -43,7 +43,7 @@ if __name__ == "__main__":
   smoothen.SetNumberOfIterations(5)
   smoothen.FeatureEdgeSmoothingOn()
   smoothen.BoundarySmoothingOff()
-  smoothen.SetFeatureAngle(5)
+  smoothen.SetFeatureAngle(60)
   smoothen.SetEdgeAngle(90)
   smoothen.SetConvergence(0.001)
   smoothen.SetRelaxationFactor(0.001)

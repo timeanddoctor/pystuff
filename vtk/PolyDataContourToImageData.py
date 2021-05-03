@@ -74,7 +74,7 @@ def main():
     extruder = vtk.vtkLinearExtrusionFilter()
     extruder.SetInputData(circle)
     extruder.SetScaleFactor(1.0)
-    # extruder.SetExtrusionTypeToNormalExtrusion()
+    #extruder.SetExtrusionTypeToNormalExtrusion() # not working
     extruder.SetExtrusionTypeToVectorExtrusion()
     extruder.SetVector(0, 0, 1)
     extruder.Update()
@@ -83,6 +83,7 @@ def main():
     pol2stenc = vtk.vtkPolyDataToImageStencil()
     pol2stenc.SetTolerance(0)  # important if extruder.SetVector(0, 0, 1) !!!
     pol2stenc.SetInputConnection(extruder.GetOutputPort())
+    #pol2stenc.SetInputData(circle)
     pol2stenc.SetOutputOrigin(origin)
     pol2stenc.SetOutputSpacing(spacing)
     pol2stenc.SetOutputWholeExtent(whiteImage.GetExtent())

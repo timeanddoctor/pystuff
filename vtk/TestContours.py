@@ -98,7 +98,8 @@ def main(argv):
 
   ImageViewer.SetSlice(int(SliderRepres.GetValue()))
 
-  # Contour representation
+  # Contour representation - responsible for placement of points, calculation of lines and contour manipulation
+  global rep
   rep = vtk.vtkOrientedGlyphContourRepresentation()
   prop = rep.GetLinesProperty()
   from vtkUtils import renderLinesAsTubes
@@ -121,22 +122,56 @@ def main(argv):
   warp.SetScaleFactor(scale)
   warp.Update()
   rep.SetActiveCursorShape(warp.GetOutput())
-  
+
+  # Use vtkContourTriangulator to fill contours
+
   # Point placer
   imageActorPointPlacer = vtk.vtkImageActorPointPlacer()
   imageActorPointPlacer.SetImageActor(ImageViewer.GetImageActor())
   rep.SetPointPlacer(imageActorPointPlacer)
 
-  # Contour widget
+  global ContourWidget
+  # Contour widget - has a  vtkWidgetEventTranslator which translate events to vtkContourWidget events
   ContourWidget = vtk.vtkContourWidget()
   ContourWidget.SetRepresentation(rep)
   ContourWidget.SetInteractor(iren)
   ContourWidget.SetEnabled(True)
   ContourWidget.ProcessEventsOn()
+  ContourWidget.ContinuousDrawOn()
+
+  if 0:
+    contour = ContourWidget.GetContourRepresentation().GetContourRepresentationAsPolyData()
+    tc = vtk.vtkContourTriangulator()
+    tc.SetInputData(contour)
+    tc.Update()
+
+    # Extrusion towards camera
+    extruder = vtk.vtkLinearExtrusionFilter()
+    extruder.CappingOn()
+    extruder.SetScalaFactor(1.0)
+    extruder.SetInputData(tc.GetOutput())
+    extruder.SetVector(0,0,1.0)
+    extruder.SetExtrusionTypeToNormalExtrusion()
+    
+    polyMapper = vtk.vtkPolyMapper()
+    polyMapper.SetInputConnection(extruder.GetOutputPort())
+    polyMapper.ScalarVisibilityOn()
+    polyMapper.Update()
+    polyActor = vtk.vtkActor()
+    polyActor.SetMapper(polyMapper)
+    prop = polyActor.GetProperty()
+    prop.SetColor(0,1,0)
+    #prop.SetRepresentationToWireframe()
+    renderer.AddActor(polyActor)
+    renderer.GetRenderWindow().Render()
+  
+
 
   iren.Start()
 
 if __name__ == '__main__':
+  global ContourWidget
+  global rep
   main(sys.argv)
   
 # Local variables: #

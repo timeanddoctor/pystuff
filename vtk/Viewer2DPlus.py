@@ -14,7 +14,7 @@ from vtkUtils import renderLinesAsTubes, AxesToTransform, rotationFromHomogeneou
 
 import math
 
-    
+
 class Viewer2D(QFrame):
   def __init__(self, parent, iDim=0):
     super(Viewer2D, self).__init__(parent)
@@ -23,7 +23,7 @@ class Viewer2D(QFrame):
 
     self.trans = None    # Misalignment
     self.invTrans = None # Inverse
-    
+
     self.overlay   = None    # Actor for segmentation contours
     self.wrongContourActor = None
     self.iDim = iDim      # Slice dimensions
@@ -37,7 +37,7 @@ class Viewer2D(QFrame):
     self.setLayout(layout)
 
     self.adjustment = vtk.vtkTransform() # Move in front
-    
+
     self.viewer = vtk.vtkResliceImageViewer()
     self.viewer.SetupInteractor(interactor)
     self.viewer.SetRenderWindow(interactor.GetRenderWindow())
@@ -45,7 +45,7 @@ class Viewer2D(QFrame):
     # Must be done from start (no effect)
     #renderWindow = self.viewer.GetRenderWindow()
     #renderWindow.SetUseOffScreenBuffers(True)
-    
+
     # Disable interactor until data are present
     self.viewer.GetRenderWindow().GetInteractor().Disable()
 
@@ -75,7 +75,7 @@ class Viewer2D(QFrame):
     prop.SetColor(red)
     mapper.ScalarVisibilityOff()
 
-    RCW = self.viewer.GetResliceCursorWidget()    
+    RCW = self.viewer.GetResliceCursorWidget()
     ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
     normal = ps.GetNormal()
     transform = vtk.vtkTransform()
@@ -91,7 +91,7 @@ class Viewer2D(QFrame):
       self.viewer.GetRenderer().RemoveActor(self.overlay)
       self.overlay = None
       self.viewer.GetRenderWindow().GetInteractor().Enable()
-      
+
   def ShowCursor(self, visible=False):
     for i in range(3):
       prop = self.viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursorActor().GetCenterlineProperty(i)
@@ -151,7 +151,7 @@ class Viewer2D(QFrame):
     vtk.vtkMath.MultiplyScalar(second1, 1.0/math.sqrt(tmp))
     normal1 = vtk.vtkVector3d()
     vtk.vtkMath.Cross(first1, second1, normal1)
-    
+
     # Get distance from plane to screen
     cursor = self.viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetResliceCursor()
     normal = cursor.GetPlane(self.iDim).GetNormal()
@@ -168,10 +168,10 @@ class Viewer2D(QFrame):
     normal0 = (0.0,0.0,1.0)
     first0 =  (1.0,0.0,0.0)
     origin0 = (0.0,0.0,0.0)
-    
+
     transMat = AxesToTransform(normal0, first0, origin0,
                                normal1, first1, origin1)
-    
+
     return transMat
 
   def GetOrigin(self):
@@ -181,7 +181,7 @@ class Viewer2D(QFrame):
   def GetNormal(self):
     cursor = self.viewer.GetResliceCursor()
     return cursor.GetPlane(self.iDim).GetNormal()
-  
+
   def GetScreenImage(self, useOffScreenBuffer=False,
                      showContours=False):
     image = None
@@ -191,7 +191,7 @@ class Viewer2D(QFrame):
     else:
       image = self.readOnScreenBuffer(showContours=showContours)
 
-    renderer = self.viewer.GetRenderer()      
+    renderer = self.viewer.GetRenderer()
     coordinate = vtk.vtkCoordinate()
     coordinate.SetCoordinateSystemToNormalizedDisplay()
 
@@ -204,7 +204,7 @@ class Viewer2D(QFrame):
       lowerRight,
       lowerLeft)
     dx = math.sqrt(dx) / dims[0]
-    
+
     coordinate.SetValue(0.0, 1.0) # Upper left
     dy = vtk.vtkMath.Distance2BetweenPoints(
       coordinate.GetComputedWorldValue(renderer),
@@ -212,7 +212,7 @@ class Viewer2D(QFrame):
     dy = math.sqrt(dy) / dims[1]
     image.SetSpacing(dx,dy,0.0)
     image.Modified()
-  
+
     # Adjust origin
     cursor = self.viewer.GetResliceCursor()
     normal = cursor.GetPlane(self.iDim).GetNormal()
@@ -231,7 +231,7 @@ class Viewer2D(QFrame):
     # image.SetOrientation(mat)
     self.viewer.Render()
     return image
-      
+
   # Get transformation to screen view
   def readOffScrenBuffer(self, showCursor=True,
                          showContours=True,
@@ -258,11 +258,11 @@ class Viewer2D(QFrame):
 
     # Render once offscreen - not shown
     renderWindow.Render()
-      
+
     windowToImageFilter = vtk.vtkWindowToImageFilter()
     windowToImageFilter.SetInput(renderWindow)
     windowToImageFilter.Update()
-  
+
     renderWindow.SetUseOffScreenBuffers(False)
 
     self.ShowCursor(True)
@@ -270,7 +270,7 @@ class Viewer2D(QFrame):
     self.ShowContours(True)
 
     return windowToImageFilter.GetOutput()
-        
+
   def readOnScreenBuffer(self, showCursor=False,
                          showContours=False,
                          showAnnotations=False):
@@ -279,23 +279,23 @@ class Viewer2D(QFrame):
 
     oldSB = renderWindow.GetSwapBuffers()
     renderWindow.SwapBuffersOff()
-    
+
     if not showCursor:
       self.ShowCursor(showCursor)
     if not showAnnotations:
       self.ShowAnnotations(showAnnotations)
     if not showContours:
       self.ShowContours(showContours)
-    
+
     windowToImageFilter = vtk.vtkWindowToImageFilter()
     windowToImageFilter.SetInput(renderWindow)
 
     windowToImageFilter.SetScale(1)
     windowToImageFilter.SetInputBufferTypeToRGBA()
-    
+
     windowToImageFilter.ReadFrontBufferOff()
     windowToImageFilter.Update() # Issues a render on input
-    
+
     renderWindow.SetSwapBuffers(oldSB)
     renderWindow.SwapBuffersOn()
 
@@ -312,7 +312,7 @@ class Viewer2D(QFrame):
     curSize = widget.GetSize()
     if (curSize != self.lastSize):
       self.lastSize = curSize
-    
+
       upperRight = vtk.vtkCoordinate()
       upperRight.SetCoordinateSystemToNormalizedDisplay()
       upperRight.SetValue(1.0, 1.0)
@@ -327,11 +327,11 @@ class Viewer2D(QFrame):
       bds[2] = upperRight.GetComputedDisplayValue(renderer)[1] - sz
       bds[3] = bds[2] + sz
       bds[4] = bds[5] = 0.0
-      
+
       # Scale to 1, default is .5
       buttonRepresentation.SetPlaceFactor(1)
       buttonRepresentation.PlaceWidget(bds)
-    
+
   def AddCornerButton(self, texture, cb = None):
     """
     Add corner button. TODO: Support callback argument
@@ -370,14 +370,14 @@ class Viewer2D(QFrame):
     color.rotate(self.iDim)
     self.cornerAnnotation.GetTextProperty().SetColor(tuple(color))
     self.cornerAnnotation.SetImageActor(self.viewer.GetImageActor())
-    
+
     self.cornerAnnotation.SetWindowLevel(self.viewer.GetWindowLevel())
     self.viewer.GetRenderer().AddViewProp(self.cornerAnnotation)
-    
+
   def SetInputData(self, data):
     self.viewer.SetInputData(data)
     self.SetCornorAnnotations()
-    
+
   def InitializeContours(self, contourData, color=yellow):
     # Disable interactor
     self.viewer.GetRenderWindow().GetInteractor().Disable()
@@ -388,14 +388,14 @@ class Viewer2D(QFrame):
 
     # Update contours
     self.plane = vtk.vtkPlane()
-    RCW = self.viewer.GetResliceCursorWidget()    
+    RCW = self.viewer.GetResliceCursorWidget()
     ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
     self.plane.SetOrigin(ps.GetOrigin())
     normal = ps.GetNormal()
     self.plane.SetNormal(normal)
 
     # We ignore empty ouput (in C++)
-    
+
     # Transform polydata according to misplacement
     self.transformPolyDataFilter = vtk.vtkTransformPolyDataFilter()
     self.transformPolyDataFilter.SetInputConnection(contourData.GetOutputPort())
@@ -416,7 +416,7 @@ class Viewer2D(QFrame):
 
     edgeMapper = vtk.vtkPolyDataMapper()
     edgeMapper.SetInputConnection(self.cutStrips.GetOutputPort())
-          
+
     self.contourActor = vtk.vtkActor()
     self.contourActor.SetMapper(edgeMapper)
     prop = self.contourActor.GetProperty()
@@ -451,7 +451,7 @@ class Viewer2D(QFrame):
     # Alternatively, one could transform the the vtkPlane using
     # GetResliceAxes from vtkImageSlicer
     if self.contourActor is not None:
-      RCW = self.viewer.GetResliceCursorWidget()    
+      RCW = self.viewer.GetResliceCursorWidget()
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
       origin = ps.GetOrigin()
       normal = ps.GetNormal()
@@ -467,11 +467,11 @@ class Viewer2D(QFrame):
         # Current solution
         cutOrigin = self.invTrans.TransformPoint(origin)
         cutNormal = self.invTrans.TransformVector(normal)
-        
+
       else:
         cutOrigin = origin
         cutNormal = normal
-        
+
       self.plane.SetOrigin(cutOrigin)
       self.plane.SetNormal(cutNormal)
       self.plane.Modified()
@@ -485,7 +485,7 @@ class Viewer2D(QFrame):
 
   def UpdateContoursShit(self, transform=None):
     if self.contourActor is not None:
-      RCW = self.viewer.GetResliceCursorWidget()    
+      RCW = self.viewer.GetResliceCursorWidget()
       ps = RCW.GetResliceCursorRepresentation().GetPlaneSource()
       origin = ps.GetOrigin()
       normal = ps.GetNormal()
@@ -499,7 +499,7 @@ class Viewer2D(QFrame):
         inv.Inverse()
         origin = inv.TransformPoint(origin)
         cutNormal = inv.TransformVector(normal)
-        
+
       self.plane.SetOrigin(origin)
       self.plane.SetNormal(cutNormal)
       self.plane.Modified()
@@ -519,7 +519,7 @@ class Viewer2D(QFrame):
 
       # Issue with memory in transform!!!
       self.contourActor.SetUserTransform(userTransform)
-      
+
   def test(self, caller, ev):
     print('test')
 
@@ -528,7 +528,7 @@ class Viewer2D(QFrame):
     self.interactor.Start()
 
 from PyQt5.QtWidgets import QStackedWidget
-    
+
 class Viewer2DStacked(QStackedWidget):
   resliceAxesChanged = pyqtSignal()
   def __init__(self, parent=None, axes=[0,1,2]):
@@ -551,7 +551,7 @@ class Viewer2DStacked(QStackedWidget):
     # TODO: Add function to 2D view to assign a callback for button
     for i in range(self.count()):
       self.widget(i).buttonWidget.AddObserver(vtk.vtkCommand.StateChangedEvent, self.btnViewChangeClicked)
-    
+
     # Make all views share the same cursor object
     for i in range(self.count()):
       self.widget(i).viewer.SetResliceCursor(self.widget(0).viewer.GetResliceCursor())
@@ -577,13 +577,13 @@ class Viewer2DStacked(QStackedWidget):
       self.widget(i).interactor.close()
   def dataValid(self):
     return self.widget(0).viewer.GetInput() is not None
-      
+
   def ShowWidgetHideData(self):
     # Show widgets but hide non-existing data (MOVE TO Stack)
     for i in range(self.count()):
       self.widget(i).show()
       self.widget(i).viewer.GetImageActor().SetVisibility(False)
-      
+
     # Establish callbacks
   def btnViewChangeClicked(self, widget, event):
     # TODO: Consider hiding other actors, i.e. no rendering to images not shown
@@ -609,4 +609,4 @@ class Viewer2DStacked(QStackedWidget):
 # python-indent: 2 #
 # indent-tabs-mode: nil #
 # End: #
-    
+
