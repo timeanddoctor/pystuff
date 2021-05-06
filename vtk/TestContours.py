@@ -101,13 +101,15 @@ def main(argv):
   # Contour representation - responsible for placement of points, calculation of lines and contour manipulation
   global rep
   rep = vtk.vtkOrientedGlyphContourRepresentation()
+  rep.GetProperty().SetOpacity(0) #1
   prop = rep.GetLinesProperty()
   from vtkUtils import renderLinesAsTubes
   from vtk.util.colors import red, green, pink, yellow
   renderLinesAsTubes(prop)
   prop.SetColor(yellow)
   propActive = rep.GetActiveProperty()
-
+  #propActive.SetOpacity(0) # 2
+  
   renderLinesAsTubes(propActive)
 
   propActive.SetColor(green)

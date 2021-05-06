@@ -60,6 +60,13 @@ class Viewer2D(QFrame):
     self.viewer.GetRenderer().ResetCamera()
     self.viewer.GetInteractor().EnableRenderOn()
 
+  def GetPosition(self):
+    """
+    Position of cursor, not the plane
+    """
+    origin = self.GetResliceCursor().GetCenter()
+    return origin
+    
   def AddOverlay(self, polyData):
     # TODO: Add node to position in 3D
     self.viewer.GetRenderWindow().GetInteractor().Disable()
@@ -100,6 +107,8 @@ class Viewer2D(QFrame):
       else:
         prop.SetOpacity(0.0)
 
+  def GetOrientation(self):
+    return self.GetDirections()
   def GetDirections(self):
     """
     Return image directions of current view in world coordinates. Changes if

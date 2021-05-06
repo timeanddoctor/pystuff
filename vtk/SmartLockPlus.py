@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import QFileDialog, QApplication,\
 
 from vtkUtils import hexCol, renderLinesAsTubes, AxesToTransform
 
-ui_file = os.path.join(os.path.dirname(__file__), 'SmartLock3.ui')
+ui_file = os.path.join(os.path.dirname(__file__), 'SmartLockPlus.ui')
 
 ui, QMainWindow = loadUiType(ui_file)
 
@@ -191,6 +191,14 @@ class SmartLock(QMainWindow, ui):
     # Experiment with 2 transforms
     self.registration = vtk.vtkTransform()
     self.alignment.SetInput(self.registration)
+
+    # Callback for displaying segmentation
+    self.segServer.ready.connect(self.updateSegmentation)
+
+    # Callback for displaying segmentation
+    self.regServer.ready.connect(self.updateRegistration)
+
+    self.btnReg.setEnabled(True)
     
   def onArrowsClicked(self, _view, _direction):
     if _view == azel.AZ:
@@ -388,9 +396,6 @@ class SmartLock(QMainWindow, ui):
     dotNAxis = xAxis*normal[0] + yAxis*normal[1] + zAxis*normal[2]
     sys.stdout.write('da: %3.2f [degrees], (axis.N): %3.2f\n' % (deg, dotNAxis))
     
-    # Callback for displaying segmentation
-    self.segServer.ready.connect(self.updateSegmentation)
-
     # For VTK version 8.2, we need to add the orientation as a
     # separate parameter, self.screenToWorldTransform
     self.segServer.execute.emit(self.segImage, self.screenToWorldTransform)
@@ -497,6 +502,7 @@ class SmartLock(QMainWindow, ui):
     self.viewUS[1].AddOverlay(contours)
     self.btnSeg.setEnabled(True)
     self.Render()
+    self.btnReg.setEnabled(True)
 
   def onRegClicked(self):
     self.btnReg.setEnabled(False)
@@ -504,9 +510,6 @@ class SmartLock(QMainWindow, ui):
     if self.lastUSContours is not None:
       self.btnReg.setEnabled(False)
       self.viewUS[1].RemoveOverlay()
-      
-      # Callback for displaying segmentation
-      self.regServer.ready.connect(self.updateRegistration)
       
       self.regServer.execute.emit(self.lastUSContours, self.alignment, self.appendFilter)
       

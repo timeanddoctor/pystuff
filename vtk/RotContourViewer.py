@@ -16,7 +16,7 @@ from PyQt5.Qt import QCursor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout,\
   QSplitter, QFrame, QSpacerItem, QPushButton, QToolButton,\
   QAction, QFileDialog, QApplication,  QSizePolicy, QToolTip,\
-  QCheckBox, QGroupBox
+  QCheckBox, QGroupBox, QLabel
 
 # TODO: Replace imgToMeshTransform with (misAlign * reAlign)
 #       SliderPressed, SliderMoved, SliderReleased
@@ -472,7 +472,7 @@ class FourPaneViewer(QMainWindow, ui):
 
     vert_layout = QVBoxLayout()
 
-    # Sagittal/Coronal/Axial planes
+    # Sagittal/Coronal/Axial planes - not used
     horz_layout1 = QHBoxLayout()
     self.btnSagittal = QPushButton("S")
     self.btnSagittal.setCheckable(True)
@@ -494,12 +494,12 @@ class FourPaneViewer(QMainWindow, ui):
     verticalSpacer = QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
     vert_layout.addSpacerItem(verticalSpacer)
 
+    
+    # Misalignment
     groupBox = QGroupBox("Misalignment")
     vert_layout.addWidget(groupBox)
     mis_layout = QVBoxLayout()
 
-    # Misalignment
-    
     # Local and reset
     horzSpacer = QSpacerItem(10, 10, QSizePolicy.Expanding, QSizePolicy.Minimum)
     self.btnLocal = QCheckBox("local")
@@ -523,7 +523,6 @@ class FourPaneViewer(QMainWindow, ui):
     groupBox.setLayout(mis_layout)
 
     # Movement
-    
     groupBox = QGroupBox("Movement")
     vert_layout.addWidget(groupBox)
     groupLayout = QVBoxLayout()
@@ -600,6 +599,8 @@ class FourPaneViewer(QMainWindow, ui):
       slider.sliderReleased.connect(lambda i=i: onReleased(0, i))
       layout0.addWidget(slider)
       controls0.append(slider)
+      label = QLabel("T" + chr(88+i))
+      layout0.addWidget(label)
       inLayout.addItem(layout0)
 
       layout1 = QHBoxLayout()
@@ -610,6 +611,8 @@ class FourPaneViewer(QMainWindow, ui):
       slider.sliderPressed.connect(lambda i=i, slider=slider: onPressed(1, i))
       slider.sliderReleased.connect(lambda i=i, slider=slider: onReleased(1, i))
       layout1.addWidget(slider)
+      label = QLabel("R" + chr(88+i))
+      layout1.addWidget(label)
       controls1.append(slider)
       inLayout.addItem(layout1)
       
@@ -627,15 +630,22 @@ class FourPaneViewer(QMainWindow, ui):
       
     startVal = self.sender().getFloatValue()
 
+  def resetMovementSlider(self):
+    self.sliderMTX.setFloatValue(0)
+    self.sliderMTY.setFloatValue(0)
+    self.sliderMTZ.setFloatValue(0)
+    self.sliderMRX.setFloatValue(0)
+    self.sliderMTY.setFloatValue(0)
+    self.sliderMTZ.setFloatValue(0)
+    
   def onResetMovement(self):
-    print("Reset movement")
     self.ResetViews()
+    self.resetMovementSlider()
     self.cb.onResliceAxesChanged(self.vtk_widgets[0].viewer.GetResliceCursorWidget(),vtk.vtkResliceCursorWidget.ResliceAxesChangedEvent)
     self.Render()
     return
     
   def onMove(self, TR, dim):
-    # TODO: Support rotate and local movement
     if TR == 0:
       startVal = {0 : self.startX,
                   1 : self.startY,
@@ -697,14 +707,17 @@ class FourPaneViewer(QMainWindow, ui):
     self.sender().setFloatValue(0.0)
 
     
-  def ResetSliders(self):
+  def resetOffsetSliders(self):
     self.sliderRZ.setFloatValue(0.0)
+    self.sliderRY.setFloatValue(0.0)
     self.sliderRX.setFloatValue(0.0)
     self.sliderTX.setFloatValue(0.0)
+    self.sliderTY.setFloatValue(0.0)
     self.sliderTZ.setFloatValue(0.0)
+
   def onResetOffset(self):
     self.imgToMeshTransform.Identity()
-    self.ResetSliders()
+    self.resetOffsetSliders()
     for i in range(3):
       self.vtk_widgets[i].UpdateContours()
     self.vessels.SetUserTransform(self.imgToMeshTransform)
