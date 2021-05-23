@@ -215,12 +215,21 @@ class SmartLock(QMainWindow, ui):
   def onResetOffset(self):
     self.btnReset.setEnabled(False)
 
-    dummy = vtk.vtkTransform()
-    self.alignment.SetInput(dummy)
-    self.alignment.Identity()
-    # self.resetOffsetSliders()
-    self.registration = vtk.vtkTransform()
-    self.alignment.SetInput(self.registration)
+    if 1:
+      dummy = vtk.vtkTransform()
+      self.alignment.SetInput(dummy)
+      self.alignment.Identity()
+      # self.resetOffsetSliders()
+      self.registration = vtk.vtkTransform()
+      self.alignment.SetInput(self.registration)
+    else:
+      self.alignment.Push()
+      self.alignment.Identity()
+      self.alignment.Pop() # Pop old pair of transformations
+      self.registration = self.alignment.GetConcatenatedTransform(0)
+      self.registration.Identity()
+      self.alignment.Identity()
+      
     # Update contours
     for i in range(2):
       self.viewUS[i].UpdateContours()
@@ -294,51 +303,6 @@ class SmartLock(QMainWindow, ui):
       self.viewUS[i].UpdateContours()
     self.Render()
 
-  def onArrowsClicked(self, _view, _direction):
-    if _view == azel.AZ:
-      first, second, normal = self.viewUS[1].GetDirections()
-      if (_direction == direction.RIGHT):
-        # Modify transformation
-        vtk.vtkMath.MultiplyScalar(first, deltaXYZ)
-        self.alignment.Translate(first)
-      elif (_direction == direction.LEFT):
-        vtk.vtkMath.MultiplyScalar(first, -deltaXYZ)
-        self.alignment.Translate(first)
-      elif (_direction == direction.UP):
-        # You cannot get and set matrix????
-        vtk.vtkMath.MultiplyScalar(second, deltaXYZ)
-        self.alignment.Translate(second)
-      elif (_direction == direction.DOWN):
-        vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
-        self.alignment.Translate(second)
-    elif _view == azel.EL:
-      first, second, normal = self.viewUS[0].GetDirections()
-      if (_direction == direction.RIGHT):
-        # Modify transformation
-        vtk.vtkMath.MultiplyScalar(first, deltaXYZ)
-        self.alignment.Translate(first)
-      elif (_direction == direction.LEFT):
-        vtk.vtkMath.MultiplyScalar(first, -deltaXYZ)
-        self.alignment.Translate(first)
-      elif (_direction == direction.UP):
-        vtk.vtkMath.MultiplyScalar(second, deltaXYZ)
-        self.alignment.Translate(second)
-      elif (_direction == direction.DOWN):
-        vtk.vtkMath.MultiplyScalar(second, -deltaXYZ)
-        self.alignment.Translate(second)
-
-    elif _view == azel.RESET:
-      dummy = vtk.vtkTransform()
-      self.alignment.SetInput(dummy)
-      self.alignment.Identity()
-      #
-      self.registration = vtk.vtkTransform()
-      self.alignment.SetInput(self.registration)
-
-    # Update contours
-    for i in range(2):
-      self.viewUS[i].UpdateContours()
-    self.Render()
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
     self.stackCT.Initialize()
@@ -455,14 +419,19 @@ class SmartLock(QMainWindow, ui):
 
     # Remove translation (why)
     pos = screenRot.GetPosition()
-    screenRot.Translate(-pos[0], -pos[1], -pos[2])
-    screenRot.Update()
+    # Rotate from x,y,z to orientation of screen
 
+    screenRot.Translate(-pos[0], -pos[1], -pos[2])
+    a, x, y, z = screenRot.GetOrientationWXYZ()
+    screenRot.RotateWXYZ(-a, x, y, z) # TEST
+    
+    screenRot.Update()
     
     # World to screen rotation
     screenRot.Inverse()
 
     # Location
+    print("Location and orientation of slice:")
     segOrigin = self.viewUS[1].GetOrigin()
     segNormal = self.viewUS[1].GetNormal()
     print('Origin: (%3.2f, %3.2f, %3.2f)' % (segOrigin[0], segOrigin[1], segOrigin[2]))
@@ -475,6 +444,8 @@ class SmartLock(QMainWindow, ui):
                       screenDisplacmentError[1],
                       screenDisplacmentError[2]))
 
+
+    
     # Rotation error on screen
     deg, xAxis, yAxis, zAxis = self.alignment.GetOrientationWXYZ()
     normal = self.viewUS[1].GetResliceCursor().GetPlane(self.viewUS[1].iDim).GetNormal()
@@ -535,7 +506,7 @@ class SmartLock(QMainWindow, ui):
     regMatrix = self.regAlignment.GetMatrix()
 
     errMatrix = vtk.vtkMatrix4x4()
-    vtk.vtkMatrix4x4.Multiply4x4(misMatrix, regMatrix, errMatrix)
+    vtk.vtkMatrix4x4.Multiply4x4(misMatrix, regMatrix, errMatrix) # ORIGINAL
 
     errorTransform = vtk.vtkTransform()
     errorTransform.SetMatrix(errMatrix)
@@ -548,9 +519,6 @@ class SmartLock(QMainWindow, ui):
     angleError, xAxis, yAxis, zAxis = what.GetOrientationWXYZ()
     sys.stdout.write('da: %3.2f [degrees]\n' % (angleError))
 
-    
-
-    
     # Works once
     #self.alignment.PostMultiply()
     #self.alignment.Concatenate(self.regAlignment) # Works
@@ -559,14 +527,20 @@ class SmartLock(QMainWindow, ui):
     # Product of two - set matrix of self.registration
     self.registration.SetMatrix(regMatrix)
 
-    # Can't we just look at self.registration (correct)
-    print('sanity')
-    what = self.registration
+    what = self.alignment
+    what.Update() # error here
+
+    
+    # Print error after registration to output, TODO: Project to plane
     posError = what.GetPosition()
     absPosError = math.sqrt(posError[0]**2+posError[1]**2+posError[2]**2)
     sys.stdout.write('dp: %3.2f [mm]\n' % (absPosError))
     angleError, xAxis, yAxis, zAxis = what.GetOrientationWXYZ()
     sys.stdout.write('da: %3.2f [degrees]\n' % (angleError))
+    
+    
+
+    
     
     
 
@@ -610,7 +584,7 @@ class SmartLock(QMainWindow, ui):
     self.btnReg.setEnabled(False)
     print("Registration")
     if self.lastUSContours is not None:
-      self.btnReg.setEnabled(False)
+      #self.btnReg.setEnabled(False)
       self.viewUS[1].RemoveOverlay()
 
       # Callback for displaying segmentation
