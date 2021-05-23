@@ -237,7 +237,7 @@ class SmartLock(QMainWindow, ui):
       #self.alignment.Identity() # Equal the input - the registration (not good)
 
       dummy = vtk.vtkTransform()
-      self.alignment.SetInput(dummy)
+      self.alignment.SetInput(dummy) # Dangerous
       self.alignment.Identity()
       # 
       self.registration = vtk.vtkTransform()
