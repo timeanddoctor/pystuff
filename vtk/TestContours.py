@@ -10,6 +10,176 @@
 import vtk
 import sys
 import os
+import math
+
+from recordclass import recordclass, RecordClass
+
+class frenet(RecordClass):
+  t:tuple[float, float, float]
+  state:bool
+
+def ConvertPointSequenceToPolyData(inPts,
+                                   closed,
+                                   outPoly):
+  npts = inPts.GetNumberOfPoints()
+
+  if ( npts < 2 ):
+    return
+
+  p0 = inPts.GetPoint(0)
+  p1 = inPts.GetPoint( npts - 1)
+
+  if ( p0[0] == p1[0] and p0[1] == p1[1] and p0[2] == p1[2] and closed == 1):
+    npts = npts - 1
+
+  temp = vtk.vtkPoints()
+  temp.SetNumberOfPoints( npts )
+  for i in range(npts):
+    temp.SetPoint( i, inPts.GetPoint( i ) )
+
+  cells = vtk.vtkCellArray()
+  cells.Allocate( cells.EstimateSize( npts + closed, 2 ) )
+  cells.InsertNextCell( npts + closed )
+
+  for i in range(npts):
+    cells.InsertCellPoint( i )
+
+  if ( closed == 1):
+    cells.InsertCellPoint( 0 )
+
+  outPoly.SetPoints( temp )
+  temp.Delete()
+  outPoly.SetLines( cells )
+  cells.Delete()
+
+def ReducePolyData2D(inPoly, outPoly, closed):
+  inPts = inPoly.GetPoints()
+  if inPts is None:
+    return 0
+
+  n = inPts.GetNumberOfPoints()
+  if (n < 3):
+    return 0
+  p0 = inPts.GetPoint(0)
+  p1 = inPts.GetPoint(n-1)
+
+  minusNth = p0[0] == p1[0] and p0[1] == p1[1] and p0[2] == p1[2]
+  if ( minusNth and closed == 1):
+    n = n - 1
+
+  # frenet unit tangent vector and state of kappa (zero or non-zero)
+  f = n*[frenet((0.0,0.0,0.0), False)]
+
+  # calculate the tangent vector by forward differences
+  for i in range(n):
+    p0 = inPts.GetPoint(i)
+    p1 = inPts.GetPoint( ( i + 1 ) % n)
+    tL = math.sqrt(vtk.vtkMath.Distance2BetweenPoints( p0, p1 ) )
+    if ( tL == 0.0 ):
+      tL = 0.0
+    f[i].t = ((p1[0] - p0[0])/tL,
+              (p1[1] - p0[1])/tL,
+              (p1[2] - p0[2])/tL)
+
+  # calculate kappa from tangent vectors by forward differences
+  # mark those points that have very low curvature
+  eps = 1.0e-10
+
+  for i in range(n):
+    t0 = f[i]
+    t1 = f[(i+1) % n]
+    f[i].state = math.fabs(vtk.vtkMath.Dot(t0,t1) - 1.0) < eps
+
+  tempPts = vtk.vtkPoints()
+
+  # mark keepers
+  ids = vtk.vtkIdTypeArray()
+
+  # for now, insist on keeping the first point for closure
+  ids.InsertNextValue(0)
+
+  for i in range(1, n):
+    pre = f[( i - 1 + n ) % n].state # means fik != 1
+    cur = f[i].state                 # means fik = 1
+    nex = f[( i + 1 ) % n].state
+
+    # possible vertex bend patterns for keep: pre cur nex
+    # 0 0 1
+    # 0 1 1
+    # 0 0 0
+    # 0 1 0
+
+    # definite delete pattern
+    # 1 1 1
+
+    keep = False
+
+    if (  pre and  cur and  nex ):
+      keep = False
+    elif (not pre and not cur and nex ):
+      keep = True
+    elif (not pre and cur and nex ):
+      keep = True
+    elif ( not pre and not cur and not nex ):
+      keep = True
+    elif ( not pre and  cur and not nex ):
+      keep = True
+
+    if ( keep  ):
+      ids.InsertNextValue( i )
+
+  for i in range(ids.GetNumberOfTuples()):
+    tempPts.InsertNextPoint( inPts.GetPoint( ids.GetValue( i ) ) )
+
+  if ( closed == 1):
+    tempPts.InsertNextPoint( inPts.GetPoint( ids.GetValue( 0 ) ) )
+
+  ConvertPointSequenceToPolyData( tempPts, closed, outPoly )
+
+  ids.Delete()
+  tempPts.Delete()
+  return 1
+
+
+def PolyDataArea(pd):
+  assert(pd.GetNumberOfLines() == 1)
+  idList = vtk.vtkIdList()
+  pd.GetLines().InitTraversal()
+  pd.GetLines().GetNextCell(idList)
+  npts = idList.GetNumberOfIds()
+  normal = (0,0,0) # Verify this
+  return vtk.vtkPolygon.ComputeArea(pd.GetPoints(),
+                                    npts,
+                                    idList,
+                                    normal)
+def Cull(in0, out0):
+  """
+  Create BTPolygon from points in input, Compute Original Area
+
+  Error = 0
+  while Error < MaxError
+    foreach vertex in input
+      Create Polygon from input, minus this vertex
+      Compute area
+      subtract area from original area
+    endfor
+    find minimum error vertex, remove it
+    Error = minimum error
+  """
+
+  """
+  Do an initial point count reduction based on
+  curvature through vertices of the polygons
+  """
+  in2 = vtk.vtkPolyData()
+  ReducePolyData2D(in0, in2, 1)
+  originalArea = PolyDataArea(in2)
+
+  return
+
+def callback(obj, ev):
+  if obj.GetWidgetState() == vtk.vtkContourWidget.Manipulate:
+    print("good")
 
 class vtkSliderCallback(object):
   def __init__(self):
@@ -30,8 +200,11 @@ def main(argv):
     VTK_DATA_ROOT = "/home/jmh/"
 
   if 1:
+    v16 = vtk.vtkMetaImageReader()
+    v16.SetFileName("/home/jmh/github/fis/data/Abdomen/CT-Abdomen.mhd")
+    v16.Update()
+  elif 0:
     fname = os.path.join(VTK_DATA_ROOT, "Data/headsq/quarter")
-    
     v16 = vtk.vtkVolume16Reader()
     v16.SetDataDimensions(64, 64)
     v16.SetDataByteOrderToLittleEndian()
@@ -151,11 +324,21 @@ def main(argv):
   ContourWidget.ProcessEventsOn()
   ContourWidget.ContinuousDrawOn()
 
+  # Can be Initialize() using polydata
+
   # Override methods that returns display position to get an overlay
   # (display postions) instead of computing it from world position and
   # the method BuildLines to interpolate using display positions
   # instead of world positions
+
+  # Thinning of contour control points
+  # AddFinalPointAction
+  ContourWidget.AddObserver(vtk.vtkCommand.EndInteractionEvent, callback)
+
+
+
   if 0:
+    # TODO: Make interior transparent
     contour = ContourWidget.GetContourRepresentation().GetContourRepresentationAsPolyData()
     tc = vtk.vtkContourTriangulator()
     tc.SetInputData(contour)

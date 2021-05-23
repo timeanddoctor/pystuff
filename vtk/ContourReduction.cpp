@@ -186,16 +186,14 @@ int ReducePolyData2D(vtkPolyData *inPoly,
 }
 
 namespace {
-double PointsArea(vtkPoints *points)
-{
+double PointsArea(vtkPoints *points) {
   int       numPoints = points->GetNumberOfPoints();
   vtkIdType *ids = new vtkIdType[numPoints + 1];
   int       i;
 
-  for ( i = 0; i < numPoints; i++ )
-    {
+  for ( i = 0; i < numPoints; i++ ) {
     ids[i] = i;
-    }
+  }
   ids[i] = 0;
   double normal[3];
   double rval( vtkPolygon::ComputeArea(points, numPoints, ids, normal) );
