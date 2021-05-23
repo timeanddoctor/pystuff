@@ -1,3 +1,12 @@
+#TODO: Reduce number of points using vtkSmoothPolyDataFilter
+
+# Pass it through a vtkDecimatePolylineFilter. It should reduce the
+# number of points. You can initialize the contour with those control
+# points then.
+
+# Kent Williams from nitrc.org brainstracer. pulling out a node 1 by
+# one and determining the change in area of the filled polygon caused
+# by node removal.
 import vtk
 import sys
 import os
@@ -20,7 +29,7 @@ def main(argv):
   else:
     VTK_DATA_ROOT = "/home/jmh/"
 
-  if 0:
+  if 1:
     fname = os.path.join(VTK_DATA_ROOT, "Data/headsq/quarter")
     
     v16 = vtk.vtkVolume16Reader()
@@ -101,6 +110,7 @@ def main(argv):
   # Contour representation - responsible for placement of points, calculation of lines and contour manipulation
   global rep
   rep = vtk.vtkOrientedGlyphContourRepresentation()
+  # vtkContourRepresentation has GetActiveNodeWorldPostion/Orientation
   rep.GetProperty().SetOpacity(0) #1
   prop = rep.GetLinesProperty()
   from vtkUtils import renderLinesAsTubes
@@ -141,6 +151,10 @@ def main(argv):
   ContourWidget.ProcessEventsOn()
   ContourWidget.ContinuousDrawOn()
 
+  # Override methods that returns display position to get an overlay
+  # (display postions) instead of computing it from world position and
+  # the method BuildLines to interpolate using display positions
+  # instead of world positions
   if 0:
     contour = ContourWidget.GetContourRepresentation().GetContourRepresentationAsPolyData()
     tc = vtk.vtkContourTriangulator()
