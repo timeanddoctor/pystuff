@@ -14,6 +14,7 @@
 =========================================================================
 '''
 
+import sys
 import vtk
 import vtk.test.Testing
 from vtk.util.misc import vtkGetDataRoot
@@ -139,79 +140,95 @@ Recording = \
             RenderEvent 261 262 0 0 0 0 0\n\
             "
 
-# Create some synthetic data
-#
-# Create a synthetic source: sample a sphere across a volume
-sphere = vtk.vtkSphere()
-sphere.SetCenter( 0.0,0.0,0.0)
-sphere.SetRadius(0.25)
 
-res = 100
-sample = vtk.vtkSampleFunction()
-sample.SetImplicitFunction(sphere)
-sample.SetModelBounds(-0.5,0.5, -0.5,0.5, -0.5,0.5)
-sample.SetSampleDimensions(res,res,res)
-sample.SetOutputScalarTypeToFloat()
-sample.Update()
+def main(argv):
+  # Create some synthetic data
+  #
+  # Create a synthetic source: sample a sphere across a volume
+  sample = None
+  if len(argv) > 1:
+    # TODO: FIX ME
+    fileName = argv[1]
+    sample = vtk.vtkMetaImageReader()
+    sample.SetFileName(fileName)
+    sample.Update()
+  else:
+    sphere = vtk.vtkSphere()
+    sphere.SetCenter( 0.0,0.0,0.0)
+    sphere.SetRadius(0.25)
+    
+    res = 100
+    sample = vtk.vtkSampleFunction()
+    sample.SetImplicitFunction(sphere)
+    sample.SetModelBounds(-0.5,0.5, -0.5,0.5, -0.5,0.5)
+    sample.SetSampleDimensions(res,res,res)
+    sample.SetOutputScalarTypeToFloat()
+    sample.Update()
+  
+  # The cut plane
+  plane = vtk.vtkPlane()
+  plane.SetOrigin(0,0,0)
+  plane.SetNormal(1,1,1)
 
-# The cut plane
-plane = vtk.vtkPlane()
-plane.SetOrigin(0,0,0)
-plane.SetNormal(1,1,1)
+  # Replace with vtkImageReslice
+  
+  cut = vtk.vtkFlyingEdgesPlaneCutter()
+  cut.SetInputConnection(sample.GetOutputPort())
+  cut.SetPlane(plane)
+  cut.ComputeNormalsOff()
 
-cut = vtk.vtkFlyingEdgesPlaneCutter()
-cut.SetInputConnection(sample.GetOutputPort())
-cut.SetPlane(plane)
-cut.ComputeNormalsOff()
+  cutMapper = vtk.vtkPolyDataMapper()
+  cutMapper.SetInputConnection(cut.GetOutputPort())
+  
+  cutActor = vtk.vtkActor()
+  cutActor.SetMapper(cutMapper)
+  cutActor.GetProperty().SetColor(1,1,1)
+  cutActor.GetProperty().SetOpacity(1)
+  
+  # Create the RenderWindow, Renderer and both Actors
+  #
+  ren = vtk.vtkRenderer()
+  renWin = vtk.vtkRenderWindow()
+  renWin.SetMultiSamples(0)
+  renWin.AddRenderer(ren)
+  iRen = vtk.vtkRenderWindowInteractor()
+  iRen.SetRenderWindow(renWin)
+  
+  # Create the widget, its representation, and callback
+  def MovePlane(widget, event_string):
+      rep.GetPlane(plane)
+  
+  rep = vtk.vtkImplicitPlaneRepresentation()
+  rep.SetPlaceFactor(1.0);
+  rep.PlaceWidget(sample.GetOutput().GetBounds())
+  rep.DrawPlaneOff()
+  rep.SetPlane(plane)
+  
+  planeWidget = vtk.vtkImplicitPlaneWidget2()
+  planeWidget.SetInteractor(iRen)
+  planeWidget.SetRepresentation(rep);
+  planeWidget.AddObserver("InteractionEvent",MovePlane);
+  
+  recorder = vtk.vtkInteractorEventRecorder()
+  recorder.SetInteractor(iRen)
+  recorder.ReadFromInputStringOn()
+  recorder.SetInputString(Recording)
+  
+  # Add the actors to the renderer, set the background and size
+  #
+  ren.AddActor(cutActor)
+  ren.SetBackground(1, 1, 1)
+  renWin.SetSize(300, 300)
+  ren.SetBackground(0.1, 0.2, 0.4)
+  
+  iRen.Initialize()
+  renWin.Render()
+  planeWidget.On()
+  
+  # Actually cut the data
+  recorder.Play()
+  iRen.Start()
 
-cutMapper = vtk.vtkPolyDataMapper()
-cutMapper.SetInputConnection(cut.GetOutputPort())
-
-cutActor = vtk.vtkActor()
-cutActor.SetMapper(cutMapper)
-cutActor.GetProperty().SetColor(1,1,1)
-cutActor.GetProperty().SetOpacity(1)
-
-# Create the RenderWindow, Renderer and both Actors
-#
-ren = vtk.vtkRenderer()
-renWin = vtk.vtkRenderWindow()
-renWin.SetMultiSamples(0)
-renWin.AddRenderer(ren)
-iRen = vtk.vtkRenderWindowInteractor()
-iRen.SetRenderWindow(renWin)
-
-# Create the widget, its representation, and callback
-def MovePlane(widget, event_string):
-    rep.GetPlane(plane)
-
-rep = vtk.vtkImplicitPlaneRepresentation()
-rep.SetPlaceFactor(1.0);
-rep.PlaceWidget(sample.GetOutput().GetBounds())
-rep.DrawPlaneOff()
-rep.SetPlane(plane)
-
-planeWidget = vtk.vtkImplicitPlaneWidget2()
-planeWidget.SetInteractor(iRen)
-planeWidget.SetRepresentation(rep);
-planeWidget.AddObserver("InteractionEvent",MovePlane);
-
-recorder = vtk.vtkInteractorEventRecorder()
-recorder.SetInteractor(iRen)
-recorder.ReadFromInputStringOn()
-recorder.SetInputString(Recording)
-
-# Add the actors to the renderer, set the background and size
-#
-ren.AddActor(cutActor)
-ren.SetBackground(1, 1, 1)
-renWin.SetSize(300, 300)
-ren.SetBackground(0.1, 0.2, 0.4)
-
-iRen.Initialize()
-renWin.Render()
-planeWidget.On()
-
-# Actually cut the data
-recorder.Play()
-#iRen.Start()
+if __name__ == "__main__":
+  print(sys.argv)
+  main(sys.argv)
