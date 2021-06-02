@@ -39,8 +39,7 @@ def IdsMinusThisPoint(ids, PointCount, i):
     ids.SetId(k, int(0))
 
 def ConvertPointSequenceToPolyData(inPts,
-                                   closed,
-                                   outPoly):
+                                   closed):
   npts = inPts.GetNumberOfPoints()
 
   if ( npts < 2 ):
@@ -67,10 +66,12 @@ def ConvertPointSequenceToPolyData(inPts,
   if (closed == 1):
     cells.InsertCellPoint( 0 )
 
+  outPoly = vtk.vtkPolyData()
   outPoly.SetPoints( temp )
   temp = None #.Delete()
   outPoly.SetLines( cells )
   cells = None #.Delete()
+  return outPoly
 
 def ReducePolyData2D(inPoly, outPoly, closed):
   """
@@ -157,7 +158,7 @@ def ReducePolyData2D(inPoly, outPoly, closed):
   if ( closed == 1):
     tempPts.InsertNextPoint( inPts.GetPoint( ids.GetValue( 0 ) ) )
 
-  ConvertPointSequenceToPolyData( tempPts, closed, outPoly )
+  outPoly = ConvertPointSequenceToPolyData( tempPts, closed)
 
   ids = None#.Delete()
   tempPts = None#.Delete()
@@ -258,7 +259,7 @@ def Cull(in0, out0):
     else:
       break
 
-  ConvertPointSequenceToPolyData(curPoints, 1, out0)
+  out0 = ConvertPointSequenceToPolyData(curPoints, 1)
   curPoints.Delete()
   in2.Delete();
 
@@ -292,7 +293,7 @@ def callback(obj, ev):
           tmpPoints = None
           continue
         pd2 = vtk.vtkPolyData()
-        ConvertPointSequenceToPolyData(tmpPoints, 1, pd2)
+        pd2 = ConvertPointSequenceToPolyData(tmpPoints, 1)
         Cull(pd2, pd3)
     print(pd.GetNumberOfPoints())
     print(pd3.GetNumberOfPoints())
