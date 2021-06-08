@@ -16,7 +16,7 @@ def MyFunc2(obj, ev):
 
   normal0 = lastNormal
   first0  = lastAxis1
-  origin0 = axes.GetOrigin()
+  origin0 = axes.GetOrigin() # not plane widget, but axes
 
   normal1 = np.array(obj.GetNormal())
   first1 = np.array(obj.GetPoint1()) - np.array(obj.GetOrigin())
@@ -148,6 +148,7 @@ planeWidget.SetInteractor(renderWindowInteractor)
 planeWidget.AddObserver(vtk.vtkCommand.EndInteractionEvent, MyFunc2, 1.0)
 
 initialMovement = True
+initialMovement = False
 
 if initialMovement:
   planeWidget.SetOrigin(1.5, 0.5, 2)
