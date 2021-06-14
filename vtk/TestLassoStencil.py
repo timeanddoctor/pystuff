@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import vtk
-from vtk.util.misc import vtkGetDataRoot
-VTK_DATA_ROOT = vtkGetDataRoot()
+
+# Inherits PolyDataToImageStencil
 
 # A script to test the vtkLassoStencilSource
 reader = vtk.vtkPNGReader()
 reader.SetDataSpacing(0.8,0.8,1.5)
 reader.SetDataOrigin(0.0,0.0,0.0)
-reader.SetFileName("" + str(VTK_DATA_ROOT) + "/Data/fullhead15.png")
+reader.SetFileName("./fullhead15.png")
 reader.Update()
 shiftScale = vtk.vtkImageShiftScale()
 shiftScale.SetInputConnection(reader.GetOutputPort())
@@ -31,11 +31,13 @@ points2.InsertNextPoint(110,170,0)
 roiStencil1 = vtk.vtkLassoStencilSource()
 roiStencil1.SetShapeToPolygon()
 roiStencil1.SetSlicePoints(0,points1)
-roiStencil1.SetInformationInput(reader.GetOutput())
+roiStencil1.SetInformationInput(reader.GetOutput()) # Spacing, Origin, and WholeExtent
+
 roiStencil2 = vtk.vtkLassoStencilSource()
 roiStencil2.SetShapeToPolygon()
 roiStencil2.SetPoints(points2)
 roiStencil2.SetInformationInput(reader.GetOutput())
+
 roiStencil3 = vtk.vtkLassoStencilSource()
 roiStencil3.SetShapeToSpline()
 roiStencil3.SetPoints(points1)
@@ -102,10 +104,17 @@ imager4 = vtk.vtkRenderer()
 imager4.AddActor2D(actor4)
 imager4.SetViewport(0.0,0.5,0.5,1.0)
 imgWin = vtk.vtkRenderWindow()
-imgWin.AddRenderer(imager1)
-imgWin.AddRenderer(imager2)
-imgWin.AddRenderer(imager3)
-imgWin.AddRenderer(imager4)
+imgWin.AddRenderer(imager1) # LowerRight
+imgWin.AddRenderer(imager2) # LowerLeft
+imgWin.AddRenderer(imager3) # UpperRight
+imgWin.AddRenderer(imager4) # UpperLeft
+
+iren = vtk.vtkRenderWindowInteractor()
+iren.SetRenderWindow(imgWin)
 imgWin.SetSize(512,512)
+
+iren.Initialize()
 imgWin.Render()
+iren.Start()
+
 # --- end of script --
