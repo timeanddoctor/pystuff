@@ -292,6 +292,7 @@ class FourPaneViewer(QMainWindow, ui):
     horz_layout0.addWidget(vert_splitter)
     horz_layout0.setContentsMargins(0, 0, 0, 0)
     self.vtk_panel.setLayout(horz_layout0)
+    self.checkBox.stateChanged.connect(self.SetResliceMode)
 
   def establishCallbacks(self):
     self.cb = ResliceCallback()
@@ -318,6 +319,7 @@ class FourPaneViewer(QMainWindow, ui):
       self.planeWidget[i].GetColorMap().SetLookupTable(self.vtk_widgets[0].viewer.GetLookupTable())
       self.planeWidget[i].GetColorMap().SetInputData(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap().GetInput()) # deep copy (not needed) #  vtkImageMapToWindowLevelColors (0x34d1ca0): Attempt to get connection index 0 for input port 0, which has 0 connections.
       self.planeWidget[i].SetColorMap(self.vtk_widgets[i].viewer.GetResliceCursorWidget().GetResliceCursorRepresentation().GetColorMap())
+      self.vtk_widgets[i].viewer.GetInteractor().Enable()
 
   def initialize(self):
     # For a large application, attach to Qt's event loop instead.
@@ -378,7 +380,7 @@ if __name__ == '__main__':
   main_window = FourPaneViewer()
   main_window.show()
   main_window.initialize()
-  main_window.loadFile('c:/github/fis/data/Abdomen/CT-Abdomen.mhd')
+  #main_window.loadFile('c:/github/fis/data/Abdomen/CT-Abdomen.mhd')
   sys.exit(app.exec_())
 
 # Local variables: #

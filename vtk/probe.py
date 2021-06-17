@@ -1,7 +1,7 @@
 import vtk
 import numpy as np
 
-def CreateOutline9076(color = (255, 99, 71), depth = 80.0):
+def CreateOutline9076(color = (255, 99, 71), depth = 80.0, resolution=10):
   """
   Create outline for the 9076 probe. The outline is contained in the XZ-plane
   """
@@ -31,7 +31,7 @@ def CreateOutline9076(color = (255, 99, 71), depth = 80.0):
   arc0.SetCenter(0, 0, -azR)
   arc0.SetPoint1(azR*np.sin(az0), 0, azR*np.cos(az0) - azR)
   arc0.SetPoint2(azR*np.sin(azN), 0, azR*np.cos(azN) - azR)
-  arc0.SetResolution( 10 )
+  arc0.SetResolution( resolution )
   arc0.Update()
 
   arcData0 = arc0.GetOutput()
@@ -41,7 +41,7 @@ def CreateOutline9076(color = (255, 99, 71), depth = 80.0):
   arc1.SetCenter(0, 0, -azR)
   arc1.SetPoint1((azR+depth)*np.sin(azN), 0, (azR+depth)*np.cos(azN) - azR)
   arc1.SetPoint2((azR+depth)*np.sin(az0), 0, (azR+depth)*np.cos(az0) - azR)
-  arc1.SetResolution( 10 )
+  arc1.SetResolution( resolution )
   arc1.Update()
 
   arcData1 = arc1.GetOutput()
@@ -62,33 +62,34 @@ def CreateOutline9076(color = (255, 99, 71), depth = 80.0):
       points.InsertNextPoint(arcData0.GetPoint(pointId))
       line = vtk.vtkLine()
       line.GetPointIds().SetId(0,i-1)
-      line.GetPointIds().SetId(1,i)
+      line.GetPointIds().SetId(1,i) # last i value is 10=resolution
       lines.InsertNextCell(line)
 
+  # i = resolution
   arcData1.GetLines().InitTraversal()
   idList = vtk.vtkIdList()
   while arcData1.GetLines().GetNextCell(idList):
     pointId = idList.GetId(0)
     points.InsertNextPoint(arcData1.GetPoint(pointId))
+    # Line from 1st arc to second arc
+    line = vtk.vtkLine()
+    line.GetPointIds().SetId(0,i)
+    j = 0
+    line.GetPointIds().SetId(1, i+1+j)
+    lines.InsertNextCell(line)
     for j in range(1, idList.GetNumberOfIds()):
       pointId = idList.GetId(j)
       points.InsertNextPoint(arcData1.GetPoint(pointId))
       line = vtk.vtkLine()
-      line.GetPointIds().SetId(0,i+j-1)
-      line.GetPointIds().SetId(1,i+j)
+      line.GetPointIds().SetId(0,i+j-1+1)
+      line.GetPointIds().SetId(1,i+j+1)
       lines.InsertNextCell(line)
 
-  # Insert two extra lines joining the two arcs
+  # Insert one extra line joining the two arcs
   line = vtk.vtkLine()
   line.GetPointIds().SetId(0,i+j)
   line.GetPointIds().SetId(1,0)
   lines.InsertNextCell(line)
-
-  line = vtk.vtkLine()
-  line.GetPointIds().SetId(0,i)
-  line.GetPointIds().SetId(1,i+1)
-  lines.InsertNextCell(line)
-
 
   linesPolyData.SetPoints(points)
   linesPolyData.SetLines(lines)

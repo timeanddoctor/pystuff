@@ -25,8 +25,6 @@ def hexCol(s):
     return tuple(int(s[i : i + 2], 16)/255.0 for i in (0, 2, 4))
   return None
 
-# Works if false
-initialMovement = False
 initialMovement = True
 
 def loadSurface(fname):
@@ -196,6 +194,27 @@ vtk.vtkMath.Subtract(planeWidget.GetPoint1(),
 renderer0.SetActiveCamera(camera)
 renderer1.SetActiveCamera(camera)
 renderer1.ResetCamera()
+
+# Image slice data
+fileName = os.path.join(fileDir, volName)
+reader = vtk.vtkMetaImageReader()
+reader.SetFileName(fileName)
+reader.Update()
+
+# The one that is visible in TrialVTK/Registration/python
+mat4x4 = np.array([[0.9824507428729312,   -0.028608856565971154, 0.1843151408713164, -221.425151769367],
+                   [0.18431514087131629,   0.3004711475787132,  -0.935812491003576,  -325.6553959586223],
+                   [-0.028608856565971223, 0.9533617481306448,   0.3004711475787133, -547.1574253306663],
+                   [0,  0,      0,      1]])
+sliceCenter = np.r_[-31.317285034663634,       -174.62449255285645,    -193.39018826551072]
+
+# Show slice using vtkImageActor
+# Use lasso stencil
+
+# Two interactors
+#https://discourse.vtk.org/t/possible-to-use-different-interaction-styles-across-viewports/1926
+
+
 
 renderWindow.Render()
 renderWindowInteractor.Start()
