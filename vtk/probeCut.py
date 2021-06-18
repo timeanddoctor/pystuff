@@ -148,21 +148,45 @@ fileName = os.path.join(fileDir, surfName)
 actor, com = loadSurface(fileName)
 
 renderer0 = vtk.vtkRenderer()
-renderer0.SetViewport(0.,0., 0.5, 1.)
+renderer0.SetViewport(0., 0., 0.5, 1.)
 
 
 renderer1 = vtk.vtkRenderer()
-renderer1.SetViewport(0.5,0., 1., 1.)
+renderer1.SetViewport(0.5, 0., 1., 1.)
 
+renderWindow = vtk.vtkRenderWindow()
+renderWindowInteractor = vtk.vtkRenderWindowInteractor()
+renderWindowInteractor.SetRenderWindow(renderWindow)
 
 camera = vtk.vtkCamera()
 
-renderWindow = vtk.vtkRenderWindow()
 renderWindow.AddRenderer(renderer1)
 renderWindow.AddRenderer(renderer0) # This the active renderer
 
-renderWindowInteractor = vtk.vtkRenderWindowInteractor()
-renderWindowInteractor.SetRenderWindow(renderWindow)
+
+imageStyle = vtk.vtkInteractorStyleImage()
+imageStyle.SetDefaultRenderer(renderer1)
+
+switchStyle = vtk.vtkInteractorStyleSwitch()
+switchStyle.SetDefaultRenderer(renderer0)
+
+renderWindowInteractor.SetInteractorStyle(switchStyle)
+
+def MouseMoveCallback(obj, event):
+  pos = obj.GetEventPosition()
+  bla = renderWindowInteractor.FindPokedRenderer(pos[0], pos[1])
+  if (bla == renderer0):
+    if (renderWindowInteractor.GetInteractorStyle() != switchStyle):
+      renderWindowInteractor.SetInteractorStyle(switchStyle)
+      print('updated')
+  else:
+    if (renderWindowInteractor.GetInteractorStyle() != imageStyle):
+      renderWindowInteractor.SetInteractorStyle(imageStyle)
+      print('updated')
+
+renderWindowInteractor.AddObserver("MouseMoveEvent", MouseMoveCallback)
+#switchStyle.AddObserver("MouseMoveEvent", MouseMoveCallback)
+
 
 renderer0.SetBackground(.9, 0.9, 0.9)
 renderer1.SetBackground(.9, 0.9, 0.9)
@@ -190,9 +214,12 @@ vtk.vtkMath.Subtract(planeWidget.GetPoint1(),
                      planeWidget.GetOrigin(),
                      lastAxis1)
 
-
 renderer0.SetActiveCamera(camera)
-renderer1.SetActiveCamera(camera)
+renderer0.ResetCamera()
+
+camera1 = vtk.vtkCamera()
+
+renderer1.SetActiveCamera(camera1)
 renderer1.ResetCamera()
 
 # Image slice data
@@ -200,6 +227,34 @@ fileName = os.path.join(fileDir, volName)
 reader = vtk.vtkMetaImageReader()
 reader.SetFileName(fileName)
 reader.Update()
+
+reslice = vtk.vtkImageReslice()
+reslice.SetInputConnection(reader.GetOutputPort())
+reslice.SetOutputDimensionality(2)
+reslice.SetResliceAxes(cutTransform.GetMatrix())
+reslice.SetInterpolationModeToLinear()
+
+# Create a greyscale lookup table
+table = vtk.vtkLookupTable()
+table.SetRange(0, 1000) # image intensity range
+table.SetValueRange(0.0, 1.0) # from black to white
+table.SetSaturationRange(0.0, 0.0) # no color saturation
+table.SetRampToLinear()
+table.Build()
+
+# Map the image through the lookup table
+color = vtk.vtkImageMapToColors()
+color.SetLookupTable(table)
+color.SetInputConnection(reslice.GetOutputPort())
+
+# Display the image
+imActor = vtk.vtkImageActor()
+imActor.GetMapper().SetInputConnection(color.GetOutputPort())
+
+renderer1.AddActor(imActor)
+
+renderer0.ResetCamera()
+renderer1.ResetCamera()
 
 # The one that is visible in TrialVTK/Registration/python
 mat4x4 = np.array([[0.9824507428729312,   -0.028608856565971154, 0.1843151408713164, -221.425151769367],
@@ -213,6 +268,7 @@ sliceCenter = np.r_[-31.317285034663634,       -174.62449255285645,    -193.3901
 
 # Two interactors
 #https://discourse.vtk.org/t/possible-to-use-different-interaction-styles-across-viewports/1926
+
 
 
 
