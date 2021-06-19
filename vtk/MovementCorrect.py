@@ -156,7 +156,7 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
   def SetInteractor(self, iren):
     self.planeWidget.SetInteractor(iren)
     if self.extrinsicHandle == 0:
-      self.extrinsicHandle = iren.AddObserver(vtk.vtkCommand.LeftButtonReleaseEvent, self.Extrinsic, 1.0)
+      self.extrinsicHandle = iren.AddObserver(vtk.vtkCommand.LeftButtonReleaseEvent, self.ExtrinsicCallback, 1.0)
     if self.updateHandle == 0:
       self.updateHandle = iren.AddObserver(vtk.vtkCommand.KeyPressEvent, self.UpdatePlaneCallback, 1.0)
 
@@ -169,9 +169,16 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     key = obj.GetKeySym()
     if key == 'u':
       self.UpdatePlane()
-      self.planeWidget.GetInteractor().GetRenderWindow().Render()
+      self.Render()
+    if key == 'i':
+      if self.planeWidget.GetEnabled():
+        # First plane is visible, rest is off
+        self.planeWidget.SetEnabled(0)
+      else:
+        self.planeWidget.SetEnabled(1)
+      self.Render()
 
-  def Extrinsic(self, obj, ev):
+  def ExtrinsicCallback(self, obj, ev):
     if obj.GetShiftKey():
       self.extrinsic = True
       print('Last transformation was extrinsic')
@@ -195,6 +202,9 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     self.planeWidget.On()
 
   def UpdatePlane(self):
+    """
+    Update last position/orientation of plane widget to match axes
+    """
     origin = vtk.vtkVector3d(np.r_[-0.5, -0.5, 0])
     point1 = vtk.vtkVector3d(np.r_[ 0.5, -0.5, 0])
     point2 = vtk.vtkVector3d(np.r_[-0.5,  0.5, 0])
@@ -204,7 +214,7 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     self.planeWidget.Modified()
 
     # We have used the last position of the plane widget to store last point.
-    # This must be updated when updated indrectly
+    # This must be updated when updated indrectly (chain of transforms)
     self.lastNormal = self.planeWidget.GetNormal()
     vtk.vtkMath.Subtract(self.planeWidget.GetPoint1(), self.planeWidget.GetOrigin(), self.lastAxis1)
     self.axes.SetOrigin(self.planeWidget.GetCenter())
@@ -251,6 +261,9 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     # Update last axes
     self.lastAxis1 = first1
     self.lastNormal = normal1
+  def Render(self):
+    self.planeWidget.GetInteractor().GetRenderWindow().Render()
+
 
 
 renderer = vtk.vtkRenderer()
