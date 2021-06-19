@@ -2,6 +2,8 @@ import sys
 import vtk
 import numpy as np
 
+from vtk.util.numpy_support import vtk_to_numpy
+
 """ 
 impostor technique to make wide lines look like tubes to the
 lighting and depth buffer. For spheres it takes square point sprites
@@ -10,6 +12,18 @@ aware that for large meshes, rendering a 12*12 point sprite per vertex
 can result in a lot of pixels being drawn when the entire mesh is
 shown, so use this power judiciously.
 """
+
+def NumpyToVTK4x4(npArr, vtkMat):
+  """
+  Hard-coded to 4x4 matrix
+  """
+  arr = vtk.vtkDoubleArray()
+  arr.SetNumberOfValues(16)
+  arr.SetVoidArray(vtkMat.GetData(), 16, 4)
+  destArr = vtk_to_numpy(arr)
+  src = npArr.flatten()
+  destArr[:] = src[:]
+  
 
 def CloudMeanDist(source, target):
   # Source contains few points, target contains many

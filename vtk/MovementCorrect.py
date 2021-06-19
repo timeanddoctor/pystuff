@@ -183,18 +183,6 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
       self.extrinsic = True
       print('Last transformation was extrinsic')
 
-  def GetOrigin(self):
-    return self.planeWidget.GetOrigin()
-
-  def SetOrigin(self, pOrigin):
-    self.planeWidget.SetOrigin(pOrigin)
-
-  def SetPoint1(self, pPoint1):
-    self.planeWidget.SetPoint1(pPoint1)
-
-  def SetPoint2(self, pPoint2):
-    self.planeWidget.SetPoint2(pPoint2)
-
   def Modified(self):
     self.planeWidget.Modified()
 
