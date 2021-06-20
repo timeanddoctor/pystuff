@@ -76,17 +76,27 @@ def renderLinesAsTubes(prop):
   prop.SetRenderLinesAsTubes(1)
   return prop
 
-def createAxesActor(length=20.0):
+def createPlaneWidget(native=False):
+  pw = vtk.vtkPlaneWidget()
+  if native:
+    return pw
+  pw.SetHandleSize(0.0025)
+  pw.Modified()
+  return pw
+
+def createAxesActor(native=False, length=20.0):
   """
   Create axes actor with variable lengths of axes. The actor is made
   pickable. If a prop picker is used the axes(this prop) can be picked
   """
   axes = vtk.vtkAxesActor()
+  if native:
+    return axes
   axes_length = length
   axes_label_font_size = np.int16(14)
   axes.SetTotalLength(axes_length, axes_length, axes_length)
-  axes.SetCylinderRadius(0.01)
-  axes.SetShaftTypeToCylinder()
+  #axes.SetCylinderRadius(0.02)
+  #axes.SetShaftTypeToCylinder()
   axes.GetXAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
   axes.GetYAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
   axes.GetZAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
@@ -116,9 +126,9 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
   any inputs
   """
   def __init__(self, transform = None):
-    self.planeWidget = vtk.vtkPlaneWidget()
-    self.planeWidget.SetHandleSize(0.02)
-    self.axes = createAxesActor(length=0.5)
+    self.planeWidget = createPlaneWidget(native=True)
+
+    self.axes = createAxesActor(native=True, length=0.5)
 
     pOrigin = vtk.vtkVector3d(np.r_[-0.5, -0.5, 0])
     pPoint1 = vtk.vtkVector3d(np.r_[0.5, -0.5, 0])
