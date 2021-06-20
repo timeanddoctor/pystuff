@@ -13,10 +13,11 @@ plane=vtk.vtkPlane()
 plane.SetOrigin(10,0,0)
 plane.SetNormal(1,0,0)
 
+
 #create cutter
 cutter=vtk.vtkCutter()
 cutter.SetCutFunction(plane)
-cutter.SetInputConnection(cube.GetOutputPort())
+cutter.SetInputData(Connection(cube.GetOutputPort())
 cutter.Update()
 cutterMapper=vtk.vtkPolyDataMapper()
 cutterMapper.SetInputConnection( cutter.GetOutputPort())

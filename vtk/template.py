@@ -9,12 +9,12 @@ renderWindowInteractor.SetRenderWindow(renderWindow)
 
 # Contain triangle-strips
 ss = vtk.vtkSectorSource()
-ss.SetRadialResolution(10)
+ss.SetRadialResolution(1)
 ss.SetCircumferentialResolution(10)
 ss.SetInnerRadius(10)
 ss.SetOuterRadius(50)
-ss.SetStartAngle(-10)
-ss.SetEndAngle(10.0)
+ss.SetStartAngle(0.0)
+ss.SetEndAngle(45.0)
 ss.ReleaseDataFlagOn()
 ss.Update()
 

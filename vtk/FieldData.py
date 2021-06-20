@@ -33,3 +33,6 @@ print(retrievedArray.GetValue(0))
 retrievedArray = polydata.GetFieldData().GetAbstractArray("MyDoubleArray")
 
 print(retrievedArray.GetValue(0))
+
+
+# Use vtkTransformFilter to demonstrate this

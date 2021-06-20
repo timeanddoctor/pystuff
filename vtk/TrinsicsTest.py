@@ -8,16 +8,52 @@ global axes
 
 from vtkUtils import AxesToTransform
 
+# TODO: Only axes actors with user transforms depend on transforms
+
 # Works without initial rotation
 class vtkAxesTransformWidget2(vtk.vtkObject):
+  """
+  No internal renderer, so you need to explicit add the axes
+  member to the renderer used
+  """
   def __init__(self, transform = None):
     self.planeWidget = vtk.vtkPlaneWidget()
+    self.axes = vtk.vtkAxesActor()
+    pOrigin = vtk.vtkVector3d(np.r_[0, 0, 0])
+    pPoint1 = vtk.vtkVector3d(np.r_[1, 0, 0])
+    pPoint2 = vtk.vtkVector3d(np.r_[0, 1, 0])
+
+    if transform is not None:
+      self.axes.SetUserTransform(transform)
+      pOrigin = transform.TransformPoint(pOrigin)
+      pPoint1 = transform.TransformPoint(pPoint1)
+      pPoint2 = transform.TransformPoint(pPoint2)
+
+    self.planeWidget.SetOrigin(pOrigin)
+    self.planeWidget.SetPoint1(pPoint1)
+    self.planeWidget.SetPoint2(pPoint2)
+
+    self.planeWidget.Modified()
+
+    self.lastNormal = self.planeWidget.GetNormal()
+    self.lastAxis1 = vtk.vtkVector3d()
+
+    vtk.vtkMath.Subtract(self.planeWidget.GetPoint1(),
+                         self.planeWidget.GetOrigin(),
+                         self.lastAxis1)
+    print(self.lastNormal)
+    print(self.lastAxis1)
+
+    self.axes.SetOrigin(self.planeWidget.GetOrigin())
+
+    self.axes.Modified()
+
+    self.planeWidget.AddObserver(vtk.vtkCommand.EndInteractionEvent,
+                                 self.SynchronizeAxes, 1.0)
+    # TODO: Create update button to align all widgets with their axes
 
   def SetInteractor(self, iren):
     self.planeWidget.SetInteractor(iren)
-
-  def AddObserver(self, event, observer, priority):
-    self.planeWidget.AddObserver(event, observer, priority)
 
   def GetOrigin(self):
     return self.planeWidget.GetOrigin()
@@ -49,48 +85,55 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
   def GetCenter(self):
     return self.planeWidget.GetCenter()
 
-def SynchronizeAxes(obj, ev):
-  global lastNormal
-  global lastAxis1
-  global axes
-  global extrinsic
-  
-  print('sync')
-  normal0 = lastNormal
-  first0  = lastAxis1
-  origin0 = axes.GetOrigin()
+  def UpdatePlane(self):
+    origin = vtk.vtkVector3d(np.r_[0, 0, 0])
+    point1 = vtk.vtkVector3d(np.r_[1, 0, 0])
+    point2 = vtk.vtkVector3d(np.r_[0, 1, 0])
+    self.planeWidget.SetOrigin(self.axes.GetUserTransform().TransformPoint(origin))
+    self.planeWidget.SetPoint1(self.axes.GetUserTransform().TransformPoint(point1))
+    self.planeWidget.SetPoint2(self.axes.GetUserTransform().TransformPoint(point2))
+    self.planeWidget.Modified()
+    # Consider transforming points
+  def SynchronizeAxes(self, obj, ev):
 
-  normal1 = np.array(obj.GetNormal())
-  first1 = np.array(obj.GetPoint1()) - np.array(obj.GetOrigin())
+    # Old coordinate system
+    normal0 = self.lastNormal
+    first0  = self.lastAxis1
+    origin0 = self.axes.GetOrigin() # Way to store origin
 
-  # Normalize (not needed)
-  l = np.sqrt(np.sum(first1**2))
-  first1 = 1/l * first1
-  
-  origin1 = obj.GetCenter()
+    # New coordinate system
+    normal1 = obj.GetNormal()
+    first1  = vtk.vtkVector3d()
+    vtk.vtkMath.Subtract(obj.GetPoint1(), obj.GetOrigin(), first1)
+    # Normalize (not needed - but we do this anyway)
+    #first1.Normalize()
+    #origin1 = obj.GetCenter() # Original
+    origin1 = obj.GetOrigin()
 
-  trans = AxesToTransform(normal0, first0, origin0,
-                          normal1, first1, origin1)
+    # Transform
+    trans = AxesToTransform(normal0, first0, origin0,
+                            normal1, first1, origin1)
 
-  if axes.GetUserTransform() is not None:
-    axes.GetUserTransform().Concatenate(trans)
-  else:
-    transform = vtk.vtkTransform()
-    transform.PostMultiply()
-    transform.SetMatrix(trans)
-    axes.SetUserTransform(transform)
 
-  # Center moved to origin of axes
-  axes.SetOrigin(obj.GetCenter())
+    if self.axes.GetUserTransform() is not None:
+      self.axes.GetUserTransform().Concatenate(trans)
+    else:
+      transform = vtk.vtkTransform()
+      transform.PostMultiply()
+      transform.SetMatrix(trans)
+      self.axes.SetUserTransform(transform)
 
-  axes.Modified()
+    self.axes.GetUserTransform().Update()
 
-  # Update last axes
-  lastAxis1[0] = first1[0]
-  lastAxis1[1] = first1[1]
-  lastAxis1[2] = first1[2]
+    # Center moved to origin of axes
+    self.axes.SetOrigin(obj.GetOrigin())
+    self.axes.Modified()
 
-  lastNormal = (normal1[0], normal1[1], normal1[2])
+    # Update last axes
+    self.lastAxis1 = first1
+    self.lastNormal = normal1
+    print(self.__repr__)
+    print('done sync')
 
 
 renderer = vtk.vtkRenderer()
@@ -102,12 +145,26 @@ renderWindow.AddRenderer(renderer);
 renderWindowInteractor = vtk.vtkRenderWindowInteractor()
 renderWindowInteractor.SetRenderWindow(renderWindow)
 
-#planeWidget = vtk.vtkPlaneWidget()
-planeWidget = vtkAxesTransformWidget2() # Not good with init rot
-planeWidget.SetInteractor(renderWindowInteractor)
-planeWidget.AddObserver(vtk.vtkCommand.EndInteractionEvent, SynchronizeAxes, 1.0)
 
-#planeWidget.planeWidget.AddObserver(vtk.vtkCommand.EndInteractionEvent, SynchronizeAxes, 1.0)
+
+tf0 = vtk.vtkTransform()
+tf0.PostMultiply()
+tf0.Update()
+
+tf1 = vtk.vtkTransform()
+tf1.PostMultiply()
+tf1.Translate(0,0,0.7)
+tf1.Update()
+
+tf2 = vtk.vtkTransform()
+tf2.PostMultiply()
+tf2.Concatenate(tf0)
+tf2.Concatenate(tf1)
+tf2.Update()
+
+
+planeWidget = vtkAxesTransformWidget2(transform=tf0)
+planeWidget.SetInteractor(renderWindowInteractor)
 
 # Bind KeyPressEvent and KeyReleaseEvent
 def Bum(obj, ev):
@@ -116,91 +173,33 @@ def Bum(obj, ev):
 
 renderWindowInteractor.AddObserver(vtk.vtkCommand.LeftButtonReleaseEvent, Bum, 1.0)
 
-initRot = False
-initRot = True
-initTrans = False
-initTrans = True
-
-if initTrans:
-  # Make some initial movement
-  pOrigin = vtk.vtkVector3d(1.5, 0.5, 2.0)
-  pPoint1 = vtk.vtkVector3d(2.5, 0.5, 2.0)
-  pPoint2 = vtk.vtkVector3d(1.5, 1.5, 2.0)
-
-if initRot:
-  # TODO: Test a rotation
-  dummyT = vtk.vtkTransform()
-  dummyT.PostMultiply()
-  #dummyT.PreMultiply()
-  dummyT.RotateX(90)
-  dummyT.Update()
-
-  pOrigin = dummyT.TransformPoint(pOrigin)
-  pPoint1 = dummyT.TransformPoint(pPoint1)
-  pPoint2 = dummyT.TransformPoint(pPoint2)
-
-if initRot or initTrans:
-  planeWidget.SetOrigin(pOrigin)
-  planeWidget.SetPoint1(pPoint1)
-  planeWidget.SetPoint2(pPoint2)
-
 
 planeWidget.Modified()
-planeWidget.On()
 
-planeWidget.planeWidget.Modified()
-
-lastNormal = planeWidget.GetNormal()
-lastAxis1 = vtk.vtkVector3d()
-
-vtk.vtkMath.Subtract(planeWidget.GetPoint1(),
-                     planeWidget.GetOrigin(),
-                     lastAxis1)
 
 renderWindowInteractor.Initialize()
 
+planeWidget.On()
+
+renderer.AddActor(planeWidget.axes)
+
+pw = vtkAxesTransformWidget2(transform=tf2)
+pw.SetInteractor(renderWindowInteractor)
+pw.On()
+renderer.AddActor(pw.axes)
+
 renderer.ResetCamera()
 
-# Crazy behavior for origin
-axes = vtk.vtkAxesActor()
-
-
-# Move the axes-actor corresponding to the initial movement
-rot = np.diag(np.ones(3, dtype=np.float))
-
-if initRot:
-  from vtk.util.numpy_support import vtk_to_numpy
-  arr = vtk.vtkDoubleArray()
-  arr.SetNumberOfValues(16)
-  arr.SetVoidArray(dummyT.GetMatrix().GetData(), 16, 4)
-  npArr = vtk_to_numpy(arr)
-  npArr = npArr.reshape((4,4))
-  rot = npArr[:3,:3]
-
-
-mat = np.zeros((4,4), dtype=np.float)
-mat[:3,:3] = rot
-mat[3,3] = 1.0
-tmp = vtk.vtkVector3d()
-vtk.vtkMath.Multiply3x3(rot, axes.GetOrigin(), tmp)
-mat[:3,3] = np.array(planeWidget.GetCenter()) - np.array(tmp)
-
-# Construct 4x4 matrix
-tfm = vtk.vtkMatrix4x4()
-tfm.DeepCopy(mat.flatten().tolist())
-tfm.Modified()
-
-tf = vtk.vtkTransform()
-tf.SetMatrix(tfm)
-tf.PostMultiply()
-tf.Update()
-
-# Apply the initial movement as a user transform
-axes.SetUserTransform(tf)
-axes.SetOrigin(planeWidget.GetCenter())
-axes.Modified()
-
-renderer.AddActor(axes)
 renderWindow.Render()
+
+def bla(obj, ev):
+  key = obj.GetKeySym()
+  if key == 'u':
+    planeWidget.UpdatePlane()
+    pw.UpdatePlane()
+    renderWindow.Render()
+
+renderWindowInteractor.AddObserver(vtk.vtkCommand.KeyPressEvent, bla)
+
 
 renderWindowInteractor.Start()

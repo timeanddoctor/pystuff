@@ -10,13 +10,15 @@ global lastNormal
 global lastAxis1
 global outlineActor
 
-if socket.gethostname() == 's1551':
+if os.name == 'posix':
+  fileDir = "/home/jmh/github/fis/data/Abdomen"
+elif socket.gethostname() == 's1551':
   fileDir = "e:/analogic/fis/data/Abdomen"
 else:
   fileDir = "c:/github/fis/data/Abdomen"
 
 surfName = 'Liver_3D_Fast_Marching_Closed.vtp'
-volName =  'VesselVolumeUncompressed.mhd'
+volName =  'VesselVolume.mhd'
 
 def hexCol(s):
   if isinstance(s,str):
