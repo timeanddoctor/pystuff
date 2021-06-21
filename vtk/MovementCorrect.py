@@ -120,15 +120,15 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
   """
   Simple composiste widget, which allow the movement of an axes actor.
 
-  After movement, the user must press 'u' to update.
+  After movement, the user must press 'r' to update.
 
   TODO: Consider calling UpdatePlane when axes actor is modified due
   any inputs
   """
   def __init__(self, transform = None):
-    self.planeWidget = createPlaneWidget(native=True)
+    self.planeWidget = createPlaneWidget(native=False)
 
-    self.axes = createAxesActor(native=True, length=0.5)
+    self.axes = createAxesActor(native=False, length=0.5)
 
     pOrigin = vtk.vtkVector3d(np.r_[-0.5, -0.5, 0])
     pPoint1 = vtk.vtkVector3d(np.r_[0.5, -0.5, 0])
@@ -172,12 +172,12 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
 
     # TODO: Throw error if impossible to add axes actor to a renderer
     # Correct way is to associate a renderer to THIS widget
-    renderer = iren.GetRenderWindow().GetRenderers().GetFirstRenderer()
+    renderer = self.planeWidget.GetInteractor().GetRenderWindow().GetRenderers().GetFirstRenderer()
     renderer.AddActor(self.axes)
 
   def UpdatePlaneCallback(self, obj, ev):
     key = obj.GetKeySym()
-    if key == 'u':
+    if key == 'r':
       self.UpdatePlane()
       self.Render()
     if key == 'i':
@@ -191,7 +191,7 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
   def ExtrinsicCallback(self, obj, ev):
     if obj.GetShiftKey():
       self.extrinsic = True
-      print('Last transformation was extrinsic')
+      print('TODO: SUpport this')
 
   def Modified(self):
     self.planeWidget.Modified()
@@ -218,7 +218,7 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     self.axes.SetOrigin(self.planeWidget.GetCenter())
 
   def SynchronizePlaneCallback(self, obj, ev):
-    # If not updated using 'u', things get out of order
+    # If not updated using 'r', things get out of order
     # Consider update these parameters when the axes actor has been updated
     normal0 = self.lastNormal
     first0  = self.lastAxis1
@@ -237,8 +237,6 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
                             normal1, first1, origin1)
 
     if self.axes.GetUserTransform() is not None:
-      if self.extrinsic:
-        self.axes.GetUserTransform().PreMultiply()
       self.axes.GetUserTransform().Concatenate(trans)
     else:
       transform = vtk.vtkTransform()
@@ -247,10 +245,6 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
       self.axes.SetUserTransform(transform)
 
     self.axes.GetUserTransform().Update()
-
-    if self.extrinsic:
-      self.axes.GetUserTransform().PostMultiply()
-      self.extrinsic = False
 
     # Center moved to origin of axes
     self.axes.SetOrigin(obj.GetCenter())
