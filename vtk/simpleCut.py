@@ -416,8 +416,8 @@ testPoints.InsertNextPoint(testPoints.GetPoint(0))
 # TEST
 bounds = testPoints.GetBounds()
 dxy = 0.3
-ny = int((np.ceil(bounds[3]) - np.floor(bounds[2])) / 0.3)
-nx = int((np.ceil(bounds[1]) - np.floor(bounds[0])) / 0.3)
+ny = int((np.ceil(bounds[3]) - np.floor(bounds[2])) / 0.25)
+nx = int((np.ceil(bounds[1]) - np.floor(bounds[0])) / 0.25)
 x0 = np.floor(bounds[0])
 y0 = np.floor(bounds[2])
 reslice.SetOutputExtent(0,nx,0,ny,0,0)
