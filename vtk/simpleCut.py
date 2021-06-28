@@ -1,3 +1,6 @@
+# TODO: Save image
+
+
 import os
 import socket
 import vtk
@@ -145,8 +148,8 @@ else:
   fileDir = "c:/github/fis/data/Abdomen"
 
 surfName = 'Liver_3D_Fast_Marching_Closed.vtp'
-#volName =  'VesselVolume.mhd'
-volName =  'VesselVolumeUncompressed.mhd'
+volName =  'VesselVolume.mhd'
+#volName =  'VesselVolumeUncompressed.mhd'
 #volName = 'CT-Abdomen.mhd'
 def hexCol(s):
   if isinstance(s,str):
@@ -281,6 +284,13 @@ def Callback(obj, ev):
   # Show where (0,0,0) in global coordinates
   transformedOrigin = outlineActor.GetUserTransform().TransformPoint(0,0,0)
 
+  if 0:
+    roiStencil.SetInformationInput(reslice.GetOutput())
+    roiStencil.Update()
+
+    stencil.SetInputConnection(reslice.GetOutputPort())
+    stencil.SetBackgroundValue(0.0)
+    stencil.SetStencilConnection(roiStencil.GetOutputPort())
 
   renderWindow.Render()
 
@@ -398,7 +408,13 @@ reslice.SetOutputDimensionality(2)
 reslice.SetResliceAxes(cutTransform.GetMatrix())
 reslice.SetInterpolationModeToLinear()
 reslice.SetAutoCropOutput(True)
-#reslice.SetOutputExtent(-10, 10, -10, 10, 0, 0)
+reslice.Update()
+
+# Needed to provide spacing, origin, and whole extent
+reslice.GetOutput()
+
+print(reslice.GetOutput().GetSpacing())
+print(reslice.GetOutput().GetOrigin())
 
 
 # Create a greyscale lookup table
@@ -414,10 +430,13 @@ color = vtk.vtkImageMapToColors()
 color.SetLookupTable(table)
 color.SetInputConnection(reslice.GetOutputPort())
 
+testPoints = vtk.vtkPoints()
+testPoints.DeepCopy(outline.GetPoints())
+testPoints.InsertNextPoint(testPoints.GetPoint(0))
+
 roiStencil = vtk.vtkLassoStencilSource()
 roiStencil.SetShapeToPolygon()
-roiStencil.SetPoints(outline.GetPoints())
-#roiStencil.SetSlicePoints(0, outline.GetPoints())
+roiStencil.SetPoints(testPoints)
 roiStencil.SetInformationInput(reslice.GetOutput())
 roiStencil.Update()
 
@@ -425,6 +444,8 @@ stencil = vtk.vtkImageStencil()
 stencil.SetInputConnection(reslice.GetOutputPort())
 stencil.SetBackgroundValue(0.0)
 stencil.SetStencilConnection(roiStencil.GetOutputPort())
+stencil.ReverseStencilOff()
+stencil.Update()
 
 # Create a greyscale lookup table
 table1 = vtk.vtkLookupTable()
@@ -449,7 +470,7 @@ imActor.GetMapper().SetInputConnection(color.GetOutputPort())
 #renderer1.AddActor(imActor)
 
 # TESTME
-renderer1.AddActor(imageActor7)
+renderer1.AddActor(imageActor7) # Works but no updates
 
 renderer0.ResetCamera()
 renderer1.ResetCamera()
