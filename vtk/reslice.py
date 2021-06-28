@@ -97,7 +97,7 @@ pixel = np.r_[0,0]
 # Multiply spacing
 tmp = pixel * spacing[0:len(pixel)]
 
-# Add origin
+# Add output origin
 tmp = np.r_[tmp, 0] + origin
 
 # 3D coordinate of pixel value

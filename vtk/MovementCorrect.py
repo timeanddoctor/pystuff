@@ -27,7 +27,7 @@ def AxesToTransform(normal0, first0, origin0,
 
   newFirst = vtk.vtkVector3d()
 
-  rot0 = np.ones((3,3),dtype=np.float)
+  rot0 = np.ones((3,3),dtype=np.float64)
   vtk.vtkMath.QuaternionToMatrix3x3(quat0, rot0)
 
   # Can be performed using quaternions
@@ -49,12 +49,12 @@ def AxesToTransform(normal0, first0, origin0,
   sintheta = np.sin(0.5*theta)
   quat1 = vtk.vtkQuaterniond(costheta, vec[0]*sintheta, vec[1]*sintheta, vec[2]*sintheta)
 
-  rot1 = np.ones((3,3),dtype=np.float)
+  rot1 = np.ones((3,3),dtype=np.float64)
   vtk.vtkMath.QuaternionToMatrix3x3(quat1, rot1)
   rot = np.dot(rot1, rot0)
 
   # Rotation
-  mat = np.zeros((4,4), dtype=np.float)
+  mat = np.zeros((4,4), dtype=np.float64)
   mat[:3,:3] = rot
   mat[3,3] = 1.0
 
@@ -120,7 +120,7 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
   """
   Simple composiste widget, which allow the movement of an axes actor.
 
-  After movement, the user must press 'r' to update.
+  After movement, the user must press 'b' to update.
 
   TODO: Consider calling UpdatePlane when axes actor is modified due
   any inputs
@@ -173,11 +173,11 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     # TODO: Throw error if impossible to add axes actor to a renderer
     # Correct way is to associate a renderer to THIS widget
     renderer = self.planeWidget.GetInteractor().GetRenderWindow().GetRenderers().GetFirstRenderer()
-    renderer.AddActor(self.axes)
+    #renderer.AddActor(self.axes)
 
   def UpdatePlaneCallback(self, obj, ev):
     key = obj.GetKeySym()
-    if key == 'r':
+    if key == 'b':
       self.UpdatePlane()
       self.Render()
     if key == 'i':
@@ -218,7 +218,7 @@ class vtkAxesTransformWidget2(vtk.vtkObject):
     self.axes.SetOrigin(self.planeWidget.GetCenter())
 
   def SynchronizePlaneCallback(self, obj, ev):
-    # If not updated using 'r', things get out of order
+    # If not updated using 'b', things get out of order
     # Consider update these parameters when the axes actor has been updated
     normal0 = self.lastNormal
     first0  = self.lastAxis1
@@ -267,6 +267,11 @@ renderWindow.AddRenderer(renderer);
 renderWindowInteractor = vtk.vtkRenderWindowInteractor()
 renderWindowInteractor.SetRenderWindow(renderWindow)
 
+style = vtk.vtkInteractorStyleSwitch()
+
+renderWindowInteractor.SetInteractorStyle(style)
+
+
 
 # Some transforms
 tf0 = vtk.vtkTransform()
@@ -298,6 +303,9 @@ pw2 = vtkAxesTransformWidget2(transform=objTransform2)
 pw2.SetInteractor(renderWindowInteractor)
 pw2.On()
 
+renderer.AddActor(pw0.axes)
+renderer.AddActor(pw1.axes)
+renderer.AddActor(pw2.axes)
 
 renderer.ResetCamera()
 renderWindow.Render()

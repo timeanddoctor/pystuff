@@ -312,11 +312,6 @@ camera = vtk.vtkCamera()
 renderWindow.AddRenderer(renderer1)
 renderWindow.AddRenderer(renderer0) # This the active renderer
 
-renderer1.ResetCamera()
-
-
-
-
 
 imageStyle = vtk.vtkInteractorStyleImage()
 imageStyle.SetDefaultRenderer(renderer1)
@@ -382,10 +377,12 @@ vtk.vtkMath.Subtract(planeWidget.GetPoint1(),
                      planeWidget.GetOrigin(),
                      lastAxis1)
 
+camera.SetViewUp(0.0,-1.0, 0.0)
 renderer0.SetActiveCamera(camera)
 renderer0.ResetCamera()
 
 camera1 = vtk.vtkCamera()
+camera1.SetViewUp(0.0,-1.0, 0.0)
 renderer1.SetActiveCamera(camera1)
 renderer1.ResetCamera()
 

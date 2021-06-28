@@ -20,6 +20,7 @@ def NumpyToVTK4x4(npArr, vtkMat):
   arr = vtk.vtkDoubleArray()
   arr.SetNumberOfValues(16)
   arr.SetVoidArray(vtkMat.GetData(), 16, 4)
+  assert(np.shape == (4,4) and np.dtype == np.float64)
   destArr = vtk_to_numpy(arr)
   src = npArr.flatten()
   destArr[:] = src[:]
@@ -146,7 +147,7 @@ def rotationFromHomogeneous(mat4):
     for j in range(3):
       mat3.SetElement(i,j,mat4.GetElement(i,j))
   return mat3
-                  
+
 def polyInfo(filter):
   """
   Debug information about output from vtkPolyData producing filters
@@ -316,3 +317,51 @@ def AxesToTransform(normal0, first0, origin0,
   trans.DeepCopy(mat.flatten().tolist())
 
   return trans
+
+def CreateCross(sz):
+  # Create a vtkPoints object and store the points in it
+  pts = vtk.vtkPoints()
+  pts.InsertNextPoint(-sz / 2, 0, 0)
+  pts.InsertNextPoint(sz / 2, 0, 0)
+  pts.InsertNextPoint(0, -sz / 2, 0)
+  pts.InsertNextPoint(0, sz / 2, 0)
+
+  # Setup the colors array
+  color = [ 255, 128, 0 ]
+  colors = vtk.vtkUnsignedCharArray()
+  colors.SetNumberOfComponents(3)
+  colors.SetName("Colors")
+
+  # Add the colors we created to the colors array
+  colors.InsertNextValue(color[0])
+  colors.InsertNextValue(color[1])
+  colors.InsertNextValue(color[2])
+
+  colors.InsertNextValue(color[0])
+  colors.InsertNextValue(color[1])
+  colors.InsertNextValue(color[2])
+
+  # Create the first line
+  line0 = vtk.vtkLine()
+  line0.GetPointIds().SetId(0, 0)
+  line0.GetPointIds().SetId(1, 1)
+
+  # Create the second line
+  line1 = vtk.vtkLine()
+  line1.GetPointIds().SetId(0, 2)
+  line1.GetPointIds().SetId(1, 3)
+
+  # Create a cell array to store the lines in and add the lines to it
+  lines = vtk.vtkCellArray()
+  lines.InsertNextCell(line0)
+  lines.InsertNextCell(line1)
+
+  # Create a polydata to store everything in
+  linesPolyData = vtk.vtkPolyData()
+  # Add the points to the dataset
+  linesPolyData.SetPoints(pts)
+  # Add the lines to the dataset
+  linesPolyData.SetLines(lines)
+  # Color the lines
+  linesPolyData.GetCellData().SetScalars(colors)
+  return linesPolyData
