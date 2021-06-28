@@ -239,7 +239,7 @@ def CreateOutline(depth=80.0, transform=None):
   prop = actor.GetProperty()
   prop.SetLineWidth(4)
   renderLinesAsTubes(prop)
-  return actor, planeWidget
+  return actor, planeWidget, outline
 
 def Callback(obj, ev):
   global renderWindow
@@ -347,7 +347,7 @@ cutTransform.PostMultiply()
 cutTransform.Translate(com[0], com[1], com[2])
 cutTransform.Update()
 
-outlineActor, planeWidget = CreateOutline(depth=80.0, transform=cutTransform)
+outlineActor, planeWidget, outline = CreateOutline(depth=80.0, transform=cutTransform)
 
 planeWidget.SetInteractor(renderWindowInteractor)
 
@@ -403,7 +403,7 @@ reslice.SetAutoCropOutput(True)
 
 # Create a greyscale lookup table
 table = vtk.vtkLookupTable()
-table.SetRange(0, 1000) # image intensity range
+table.SetRange(0, 100) # image intensity range
 table.SetValueRange(0.0, 1.0) # from black to white
 table.SetSaturationRange(0.0, 0.0) # no color saturation
 table.SetRampToLinear()
@@ -414,11 +414,42 @@ color = vtk.vtkImageMapToColors()
 color.SetLookupTable(table)
 color.SetInputConnection(reslice.GetOutputPort())
 
+roiStencil = vtk.vtkLassoStencilSource()
+roiStencil.SetShapeToPolygon()
+roiStencil.SetPoints(outline.GetPoints())
+#roiStencil.SetSlicePoints(0, outline.GetPoints())
+roiStencil.SetInformationInput(reslice.GetOutput())
+roiStencil.Update()
+
+stencil = vtk.vtkImageStencil()
+stencil.SetInputConnection(reslice.GetOutputPort())
+stencil.SetBackgroundValue(0.0)
+stencil.SetStencilConnection(roiStencil.GetOutputPort())
+
+# Create a greyscale lookup table
+table1 = vtk.vtkLookupTable()
+table1.SetRange(0, 100) # image intensity range
+table1.SetValueRange(0.0, 1.0) # from black to white
+table1.SetSaturationRange(0.0, 0.0) # no color saturation
+table1.SetRampToLinear()
+table1.Build()
+
+# Map the image through the lookup table
+color1 = vtk.vtkImageMapToColors()
+color1.SetLookupTable(table1)
+color1.SetInputConnection(stencil.GetOutputPort())
+
+imageActor7 = vtk.vtkImageActor()
+imageActor7.GetMapper().SetInputConnection(color1.GetOutputPort())
+
 # Display the sliced image
 imActor = vtk.vtkImageActor()
 imActor.GetMapper().SetInputConnection(color.GetOutputPort())
 
-renderer1.AddActor(imActor)
+#renderer1.AddActor(imActor)
+
+# TESTME
+renderer1.AddActor(imageActor7)
 
 renderer0.ResetCamera()
 renderer1.ResetCamera()
