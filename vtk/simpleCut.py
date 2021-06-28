@@ -5,6 +5,8 @@ import numpy as np
 
 # TODO: Look in reslice.py and compute location of origin in 2D coordinates
 
+from vtkUtils import CreateCross
+
 def CreateOutline9076(color = (255, 99, 71), depth = 80.0, resolution=10):
   """
   Create outline for the 9076 probe. The outline is contained in the XZ-plane
@@ -143,8 +145,9 @@ else:
   fileDir = "c:/github/fis/data/Abdomen"
 
 surfName = 'Liver_3D_Fast_Marching_Closed.vtp'
-volName =  'VesselVolume.mhd'
-
+#volName =  'VesselVolume.mhd'
+volName =  'VesselVolumeUncompressed.mhd'
+#volName = 'CT-Abdomen.mhd'
 def hexCol(s):
   if isinstance(s,str):
     if "#" in s:
@@ -239,9 +242,12 @@ def CreateOutline(depth=80.0, transform=None):
   return actor, planeWidget
 
 def Callback(obj, ev):
+  global renderWindow
   global lastNormal
   global lastAxis1
   global outlineActor
+  global originActor
+  global origin2DActor
 
   normal0 = lastNormal
   first0  = lastAxis1
@@ -265,13 +271,18 @@ def Callback(obj, ev):
   # Only for book keeping
   outlineActor.SetOrigin(obj.GetCenter()) # Not modified by SetUserTransform
   outlineActor.Modified()
+
   # Update last axes
   lastAxis1[0] = first1[0]
   lastAxis1[1] = first1[1]
   lastAxis1[2] = first1[2]
-
   lastNormal = (normal1[0], normal1[1], normal1[2])
 
+  # Show where (0,0,0) in global coordinates
+  transformedOrigin = outlineActor.GetUserTransform().TransformPoint(0,0,0)
+
+
+  renderWindow.Render()
 
 fileName = os.path.join(fileDir, surfName)
 actor, com = loadSurface(fileName)
@@ -283,6 +294,15 @@ renderer0.SetViewport(0., 0., 0.5, 1.)
 renderer1 = vtk.vtkRenderer()
 renderer1.SetViewport(0.5, 0., 1., 1.)
 
+mapper = vtk.vtkPolyDataMapper()
+mapper.SetInputData(CreateCross(20.0))
+global _Cross
+_Cross = vtk.vtkActor()
+_Cross.GetProperty().SetLineWidth(5)
+_Cross.SetPosition(0.0, 50.006, 0.0)
+_Cross.SetMapper(mapper)
+
+global renderWindow
 renderWindow = vtk.vtkRenderWindow()
 renderWindowInteractor = vtk.vtkRenderWindowInteractor()
 renderWindowInteractor.SetRenderWindow(renderWindow)
@@ -291,6 +311,11 @@ camera = vtk.vtkCamera()
 
 renderWindow.AddRenderer(renderer1)
 renderWindow.AddRenderer(renderer0) # This the active renderer
+
+renderer1.ResetCamera()
+
+
+
 
 
 imageStyle = vtk.vtkInteractorStyleImage()
@@ -336,6 +361,20 @@ renderer0.AddActor(outlineActor)
 planeWidget.Modified()
 planeWidget.On()
 
+global originActor
+ss = vtk.vtkSphereSource()
+ss.SetRadius(3.0)
+ss.SetThetaResolution(10)
+ss.SetPhiResolution(10)
+ss.SetCenter(0.0, 50.006, 0.0)
+ss.Modified()
+ssm = vtk.vtkPolyDataMapper()
+ssm.SetInputConnection(ss.GetOutputPort())
+originActor = vtk.vtkActor()
+originActor.SetMapper(ssm)
+originActor.SetUserTransform(cutTransform)
+renderer0.AddActor(originActor)
+
 lastNormal = planeWidget.GetNormal()
 lastAxis1 = vtk.vtkVector3d()
 
@@ -347,7 +386,6 @@ renderer0.SetActiveCamera(camera)
 renderer0.ResetCamera()
 
 camera1 = vtk.vtkCamera()
-
 renderer1.SetActiveCamera(camera1)
 renderer1.ResetCamera()
 
@@ -362,7 +400,7 @@ reslice.SetInputConnection(reader.GetOutputPort())
 reslice.SetOutputDimensionality(2)
 reslice.SetResliceAxes(cutTransform.GetMatrix())
 reslice.SetInterpolationModeToLinear()
-#reslice.SetAutoCropOutput(True)
+reslice.SetAutoCropOutput(True)
 #reslice.SetOutputExtent(-10, 10, -10, 10, 0, 0)
 
 
@@ -379,7 +417,7 @@ color = vtk.vtkImageMapToColors()
 color.SetLookupTable(table)
 color.SetInputConnection(reslice.GetOutputPort())
 
-# Display the image
+# Display the sliced image
 imActor = vtk.vtkImageActor()
 imActor.GetMapper().SetInputConnection(color.GetOutputPort())
 
@@ -402,7 +440,34 @@ sliceCenter = np.r_[-31.317285034663634,       -174.62449255285645,    -193.3901
 #https://discourse.vtk.org/t/possible-to-use-different-interaction-styles-across-viewports/1926
 
 
+def cbCameraModifiedEvt(obj, ev):
+  print('camera')
+  # Synchronize camera for overlay (renderer2) and renderer1
+  global camera2
+  camera2.ShallowCopy(obj)
+
+#
+
+renderer2 = vtk.vtkRenderer()
+renderWindow.SetNumberOfLayers(2)
+renderer2.SetViewport(0.5, 0., 1., 1.)
+renderer2.SetLayer(1)
+renderer2.SetInteractive(0)
+renderWindow.AddRenderer(renderer2)
+
+global camera2
+camera2 = renderer2.GetActiveCamera()
+camera2.ShallowCopy(renderer1.GetActiveCamera())
+
+renderer2.AddActor(_Cross)
+
+
+cam = renderer1.GetActiveCamera()
+cam.AddObserver("ModifiedEvent", cbCameraModifiedEvt)
 
 
 renderWindow.Render()
+
+
+
 renderWindowInteractor.Start()
