@@ -408,14 +408,26 @@ reslice.SetOutputDimensionality(2)
 reslice.SetResliceAxes(cutTransform.GetMatrix())
 reslice.SetInterpolationModeToLinear()
 reslice.SetAutoCropOutput(True)
+
+testPoints = vtk.vtkPoints()
+testPoints.DeepCopy(outline.GetPoints())
+testPoints.InsertNextPoint(testPoints.GetPoint(0))
+
+# TEST
+bounds = testPoints.GetBounds()
+dxy = 0.3
+ny = int((np.ceil(bounds[3]) - np.floor(bounds[2])) / 0.3)
+nx = int((np.ceil(bounds[1]) - np.floor(bounds[0])) / 0.3)
+x0 = np.floor(bounds[0])
+y0 = np.floor(bounds[2])
+reslice.SetOutputExtent(0,nx,0,ny,0,0)
+reslice.SetOutputSpacing(dxy, dxy, dxy)
+reslice.SetOutputOrigin(x0, y0, 0.0)
+
 reslice.Update()
 
 # Needed to provide spacing, origin, and whole extent
 reslice.GetOutput()
-
-print(reslice.GetOutput().GetSpacing())
-print(reslice.GetOutput().GetOrigin())
-
 
 # Create a greyscale lookup table
 table = vtk.vtkLookupTable()
@@ -429,10 +441,6 @@ table.Build()
 color = vtk.vtkImageMapToColors()
 color.SetLookupTable(table)
 color.SetInputConnection(reslice.GetOutputPort())
-
-testPoints = vtk.vtkPoints()
-testPoints.DeepCopy(outline.GetPoints())
-testPoints.InsertNextPoint(testPoints.GetPoint(0))
 
 roiStencil = vtk.vtkLassoStencilSource()
 roiStencil.SetShapeToPolygon()
