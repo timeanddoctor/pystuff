@@ -10,6 +10,142 @@ import numpy as np
 
 from vtkUtils import CreateCross
 
+def CreateSurface9076():
+  # Coordinate transformations
+
+  # Return cached value if present
+  if CreateSurface9076.output is not None:
+    print('reused STL surface')
+    return CreateSurface9076.output
+  
+  # Sensor from STL
+  sensorFromSTL = vtk.vtkTransform()
+  sensorFromSTL.PostMultiply()
+  sensorFromSTL.RotateZ(180.0)
+  sensorFromSTL.Translate(109.27152 + 29.7296 - 5.41,
+                        29.69371 - 2.2,
+                        75.52397 - 2.144)
+  sensorFromSTL.Modified()
+  sensorFromSTL.Inverse()
+  sensorFromSTL.Update()
+
+  # Array actual from Array nominal  
+  actFromNom = vtk.vtkTransform() 
+  actFromNom.PostMultiply()
+  actFromNom.RotateZ(np.rad2deg(-0.04712388))
+  actFromNom.RotateY(np.rad2deg(0.00942477))
+  actFromNom.Identity() # Not used since ideal probe
+  actFromNom.Update()
+
+  # Array nominal from probe reference  
+  nomFromRef = vtk.vtkTransform()
+  nomFromRef.PostMultiply()
+  nomFromRef.RotateY(np.rad2deg(-0.05061454))
+  nomFromRef.Translate(19.35, -0.62, -46.09)
+  nomFromRef.Update()
+
+  # Probe reference from sensor nominal  
+  refFromSensor = vtk.vtkTransform() 
+  refFromSensor.PostMultiply()
+  refFromSensor.Translate(-3.33, 1.59, 1.7) # original
+  refFromSensor.Translate(0.0, -3.86, 0.0) # Shifted half-height of xdx + enclosing
+  refFromSensor.Inverse()
+  refFromSensor.Update()
+  
+  # Actual array from sensor nominal
+  actFromSensor = vtk.vtkTransform()
+  actFromSensor.Identity()
+  actFromSensor.Concatenate(refFromSensor)
+  actFromSensor.Concatenate(nomFromRef)
+  actFromSensor.Concatenate(actFromNom)
+  actFromSensor.Update()
+  
+  # To Ultrasound from Array actual (based on ProbeCenterY value from
+  # OEM "QUERY:B_TRANS_IMAGE_CALIB;").
+  usFromActual = vtk.vtkTransform()
+  usFromActual.PostMultiply()
+  usFromActual.Translate(-47.8225, 0.0, 0.0) # original
+  usFromActual.Translate(0.0, 0.0, 45.0) # JEM offset fra OEM (must be)
+  usFromActual.Update()
+
+  # Final transformation from STL to XZ-plane
+  finalTransform = vtk.vtkTransform()
+  finalTransform.PostMultiply()
+  finalTransform.Identity()
+  finalTransform.Concatenate(sensorFromSTL)
+  finalTransform.Concatenate(actFromSensor)
+  finalTransform.Concatenate(usFromActual)
+
+  # Rotate around X 
+  finalTransform.RotateX(-90)
+  finalTransform.Translate(0.0, 50.006, 0.0)
+  
+  reader = vtk.vtkSTLReader()
+  file_name = './9076.vtp'
+  reader = vtk.vtkXMLPolyDataReader()
+  reader.SetFileName(file_name)
+  reader.Update()
+
+  tfpoly = vtk.vtkTransformPolyDataFilter()
+  tfpoly.SetInputConnection(reader.GetOutputPort())
+  tfpoly.SetTransform(finalTransform)
+  tfpoly.Update()
+  CreateSurface9076.output = tfpoly.GetOutput()
+  return CreateSurface9076.output
+CreateSurface9076.output = None
+
+def CreateAssembly9076():
+  if CreateAssembly9076.output is not None:
+    return CreateAssembly9076.output
+  
+  outline = CreateOutline9076()
+
+  # Works - convert lines to polygons
+  cutPoly = vtk.vtkPolyData()
+  cutPoly.SetPoints(outline.GetPoints())
+  cutPoly.SetPolys(outline.GetLines())
+
+  # Triangle filter is robust enough to ignore the duplicate point at
+  # the beginning and end of the polygons and triangulate them.
+  cutTriangles = vtk.vtkTriangleFilter()
+  cutTriangles.SetInputData(cutPoly)
+  cutMapper = vtk.vtkPolyDataMapper()
+
+  cutMapper.SetInputConnection(cutTriangles.GetOutputPort())
+
+  cutActor = vtk.vtkActor()
+  cutActor.SetMapper(cutMapper)
+  cutActor.GetProperty().SetColor(peacock) # Intersecting plane
+  cutActor.GetProperty().SetOpacity(.3)
+
+  probeSurface = CreateSurface9076()
+  mapper = vtk.vtkPolyDataMapper()
+  mapper.SetInputData(probeSurface)
+
+  probeActor = vtk.vtkActor()
+  probeActor.SetMapper(mapper)
+  if vtk.VTK_VERSION > '9.0.0':
+    prop = probeActor.GetProperty()
+    prop.SetInterpolationToPBR()
+    prop.SetMetallic(0.5)
+    prop.SetRoughness(0.4)
+
+  mapper0 = vtk.vtkPolyDataMapper()
+  mapper0.SetInputData(outline)
+
+  outLineActor = vtk.vtkActor()
+  outLineActor.SetMapper(mapper0)
+  outLineActor.GetProperty().SetLineWidth(4)
+
+    
+  assemblyActor = vtk.vtkAssembly()
+  assemblyActor.AddPart(cutActor)
+  assemblyActor.AddPart(probeActor)
+  assemblyActor.AddPart(outLineActor)
+  CreateAssembly9076.output = assemblyActor
+  return CreateAssembly9076.output
+CreateAssembly9076.output = None  
+
 def CreateOutline9076(color = (255, 99, 71), depth = 80.0, resolution=10):
   """
   Create outline for the 9076 probe. The outline is contained in the XZ-plane
@@ -148,8 +284,8 @@ else:
   fileDir = "c:/github/fis/data/Abdomen"
 
 surfName = 'Liver_3D_Fast_Marching_Closed.vtp'
-volName =  'VesselVolume.mhd'
-#volName =  'VesselVolumeUncompressed.mhd'
+#volName =  'VesselVolume.mhd'
+volName =  'VesselVolumeUncompressed.mhd'
 #volName = 'CT-Abdomen.mhd'
 def hexCol(s):
   if isinstance(s,str):
@@ -227,22 +363,46 @@ def CreateOutline(depth=80.0, transform=None):
 
   mapper = vtk.vtkPolyDataMapper()
   mapper.SetInputData(outline)
-  actor = vtk.vtkActor()
-  actor.SetMapper(mapper)
+  actor0 = vtk.vtkActor()
+  actor0.SetMapper(mapper)
 
   # Origin used for book-keeping
   #center = (0.0, 0.0, 0.5*(bounds[4]+ bounds[5]))
   center = (0.0, 0.5*(bounds[2]+ bounds[3]), 0.0)
 
-  if initialMovement and transform is not None:
-    actor.SetUserTransform(transform)
-    center = transform.TransformPoint(center)
-  actor.SetOrigin(center)
-
-  prop = actor.GetProperty()
+  prop = actor0.GetProperty()
   prop.SetLineWidth(4)
   renderLinesAsTubes(prop)
-  return actor, planeWidget, outline
+
+
+  probeSurface = CreateSurface9076()
+  mapper = vtk.vtkPolyDataMapper()
+  mapper.SetInputData(probeSurface)
+
+  probeActor = vtk.vtkActor()
+  probeActor.SetMapper(mapper)
+  if vtk.VTK_VERSION > '9.0.0':
+    prop = probeActor.GetProperty()
+    prop.SetInterpolationToPBR()
+    prop.SetMetallic(0.5)
+    prop.SetRoughness(0.4)
+
+  #actor = actor0
+
+
+  
+  assemblyActor = vtk.vtkAssembly()
+  #assemblyActor.AddPart(cutActor)
+  assemblyActor.AddPart(probeActor)
+  #assemblyActor.AddPart(outLineActor)
+  assemblyActor.AddPart(actor0)
+
+  if initialMovement and transform is not None:
+    assemblyActor.SetUserTransform(transform)
+    center = transform.TransformPoint(center)
+  assemblyActor.SetOrigin(center)
+  
+  return assemblyActor, planeWidget, outline
 
 def Callback(obj, ev):
   global renderWindow
@@ -415,9 +575,9 @@ testPoints.InsertNextPoint(testPoints.GetPoint(0))
 
 # TEST
 bounds = testPoints.GetBounds()
-dxy = 0.3
-ny = int((np.ceil(bounds[3]) - np.floor(bounds[2])) / 0.25)
-nx = int((np.ceil(bounds[1]) - np.floor(bounds[0])) / 0.25)
+dxy = 0.25
+ny = int((np.ceil(bounds[3]) - np.floor(bounds[2])) / dxy)
+nx = int((np.ceil(bounds[1]) - np.floor(bounds[0])) / dxy)
 x0 = np.floor(bounds[0])
 y0 = np.floor(bounds[2])
 reslice.SetOutputExtent(0,nx,0,ny,0,0)
@@ -457,7 +617,7 @@ stencil.Update()
 
 # Create a greyscale lookup table
 table1 = vtk.vtkLookupTable()
-table1.SetRange(0, 100) # image intensity range
+table1.SetRange(0, 200) # image intensity range
 table1.SetValueRange(0.0, 1.0) # from black to white
 table1.SetSaturationRange(0.0, 0.0) # no color saturation
 table1.SetRampToLinear()
