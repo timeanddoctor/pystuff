@@ -547,12 +547,12 @@ vtk.vtkMath.Subtract(planeWidget.GetPoint1(),
                      planeWidget.GetOrigin(),
                      lastAxis1)
 
-camera.SetViewUp(0.0,-1.0, 0.0)
+camera.SetViewUp(0.0, -1.0, 0.0)
 renderer0.SetActiveCamera(camera)
 renderer0.ResetCamera()
 
 camera1 = vtk.vtkCamera()
-camera1.SetViewUp(0.0,-1.0, 0.0)
+camera1.SetViewUp(0.0, -1.0, 0.0)
 renderer1.SetActiveCamera(camera1)
 renderer1.ResetCamera()
 
@@ -571,7 +571,6 @@ reslice.SetAutoCropOutput(True)
 
 testPoints = vtk.vtkPoints()
 testPoints.DeepCopy(outline.GetPoints())
-testPoints.InsertNextPoint(testPoints.GetPoint(0))
 
 # TEST
 bounds = testPoints.GetBounds()
@@ -580,7 +579,7 @@ ny = int((np.ceil(bounds[3]) - np.floor(bounds[2])) / dxy)
 nx = int((np.ceil(bounds[1]) - np.floor(bounds[0])) / dxy)
 x0 = np.floor(bounds[0])
 y0 = np.floor(bounds[2])
-reslice.SetOutputExtent(0,nx,0,ny,0,0)
+reslice.SetOutputExtent(0, nx, 0, ny, 0, 0)
 reslice.SetOutputSpacing(dxy, dxy, dxy)
 reslice.SetOutputOrigin(x0, y0, 0.0)
 
