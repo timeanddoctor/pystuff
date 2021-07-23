@@ -25,22 +25,41 @@ scalarOpacity.AddPoint(220.0, 1.0)
 scalarOpacity.AddPoint(150.0, 0.2)
 scalarOpacity.AddPoint(190.0, 0.6)
 
-_slice = vtk.vtkPlane()
-_slice.SetOrigin(1.0, 0.0, 0.0)
-_slice.SetNormal(0.707107, 0.0, 0.707107)
+slice0 = vtk.vtkPlane()
+slice0.SetOrigin(1.0, 0.0, 0.0)
+slice0.SetNormal(0.707107, 0.0, 0.707107)
 
-volumeProperty = vtk.vtkVolumeProperty()
-volumeProperty.SetInterpolationTypeToLinear()
-volumeProperty.SetColor(colorTransferFunction)
-volumeProperty.SetScalarOpacity(scalarOpacity)
-volumeProperty.SetSliceFunction(_slice)
+volumeProperty0 = vtk.vtkVolumeProperty()
+volumeProperty0.SetInterpolationTypeToLinear()
+volumeProperty0.SetColor(colorTransferFunction)
+volumeProperty0.SetScalarOpacity(scalarOpacity)
+volumeProperty0.SetSliceFunction(slice0)
 
-volume = vtk.vtkVolume()
-volume.SetMapper(mapper)
-volume.SetProperty(volumeProperty)
+volume0 = vtk.vtkVolume()
+volume0.SetMapper(mapper)
+volume0.SetProperty(volumeProperty0)
 
 renderer = vtk.vtkRenderer()
-renderer.AddVolume(volume)
+renderer.AddVolume(volume0)
+
+if 1:
+    # Add a new volume (view)
+    slice1 = vtk.vtkPlane()
+    slice1.SetOrigin(1.0, 0.0, 0.0)
+    slice1.SetNormal(-0.707107, 0.0, 0.707107)
+    
+    volumeProperty1 = vtk.vtkVolumeProperty()
+    volumeProperty1.SetInterpolationTypeToLinear()
+    volumeProperty1.SetColor(colorTransferFunction)
+    volumeProperty1.SetScalarOpacity(scalarOpacity)
+    volumeProperty1.SetSliceFunction(slice1)
+    
+    volume1 = vtk.vtkVolume()
+    volume1.SetMapper(mapper)
+    volume1.SetProperty(volumeProperty1)
+    
+    renderer.AddVolume(volume1)
+
 renderer.SetBackground(0.0, 0.0, 0.0)
 renderer.ResetCamera()
 

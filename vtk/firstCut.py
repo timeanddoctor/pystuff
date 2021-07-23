@@ -119,6 +119,7 @@ def CreateAssembly9076():
   cutActor.GetProperty().SetOpacity(.3)
 
   probeSurface = CreateSurface9076()
+
   mapper = vtk.vtkPolyDataMapper()
   mapper.SetInputData(probeSurface)
 
@@ -351,11 +352,11 @@ def CreateOutline(depth=80.0, transform=None):
   planeWidget.SetPoint1(point1)
   planeWidget.SetPoint2(point2)
   prop = planeWidget.GetPlaneProperty()
-  prop.SetColor( .2, .8, 0.1 )
+  #prop.SetColor( .2, .8, 0.1 )
   renderLinesAsTubes(prop)
   prop = planeWidget.GetHandleProperty()
-  prop.SetColor(0, .4, .7 )
-  prop.SetLineWidth( 1.5 )#//Set plane lineweight
+  #prop.SetColor(0, .4, .7 )
+  #prop.SetLineWidth( 1.5 )#//Set plane lineweight
   renderLinesAsTubes(prop)
 
   planeWidget.Modified()
