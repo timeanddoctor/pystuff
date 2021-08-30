@@ -76,7 +76,7 @@ def CreateSurface9076():
   finalTransform.Concatenate(actFromSensor)
   finalTransform.Concatenate(usFromActual)
 
-  # Rotate around X, result is in XY-plane
+  # Rotate around X, XZ -> XY-plane
   finalTransform.RotateX(-90)
   finalTransform.Translate(0.0, 50.006, 0.0)
   

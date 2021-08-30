@@ -1,14 +1,23 @@
 import vtk
 import sys
+import os
 
 def main(argv):
-  reader = vtk.vtkMetaImageReader()
-  reader.SetFileName(argv[1])
-  reader.Update()
+  fileName, fileExtension = os.path.splitext(argv[1])
+  fileExtension = fileExtension.lower()
+  if fileExtension in ['.mha', '.mhd']:
+    reader = vtk.vtkMetaImageReader()
+    reader.SetFileName(argv[1])
+    reader.Update()
+  elif fileExtension in ['.png']:
+    reader = vtk.vtkPNGReader()
+    reader.SetFileName(argv[1])
+    reader.Update()
 
   imgData = reader.GetOutput()
   low, high = imgData.GetPointData().GetScalars().GetRange()
-
+  print("low: %f, high: %f" % (low, high))
+  print(imgData.GetDimensions())
   image = vtk.vtkImageActor()
   image.GetMapper().SetInputConnection(reader.GetOutputPort())
 
