@@ -37,11 +37,17 @@ def gravityToReplaceWater(sg, volume, new_sg):
   return volume - keep
 
 def replaceWaterToGravity(sg, volume, replaced):
+  """
+  Use that 1 g of sugar displace 0.5 ml
+  """
   suger = (volume-replaced) * (sg-1.0)
-  gravity = suger / volume + 1.0 
+  gravity = suger / (volume + 0.5*sugar) + 1.0
   return gravity
 
 """
+
+Values are not corrected for sugar displacing water
+
 24.0 grader
 1.090 - 38.88
 1.085 100  -  38.51 
@@ -73,9 +79,14 @@ def replaceWaterToGravity(sg, volume, replaced):
 
 1.000     22.07, 22.08, 22.09, 
 
+Every gram of sugar displaces 0.5 ml.
+
+
  0.9003342867933533 + 0.005008439075709344 *tilt
 Degree 2: 0.7393019471433523 + 0.015815080134849994 *tilt-0.00017716269446713654 *tilt*tilt
 Degree 3: 0.4432573175595937 + 0.04566777876689018 *tilt-0.00116339178967176 *tilt*tilt + 0.00001068453438881412 *tilt*tilt*tilt
+
+0.8792048981181 + 0.007695678853705*tilt-0.0001376956760855*tilt^2 + 0.0000010082686210055*tilt^3
 
 
 """
